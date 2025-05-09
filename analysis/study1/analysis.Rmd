@@ -1,0 +1,267 @@
+---
+title: "Fun Puzzles Study 1 Modeling"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+    #code_folding: "hide"
+    df_print: paged
+---
+
+## Set up
+```{r}
+rm(list=ls())
+```
+
+```{r setup, include=FALSE, warning=F, message=F}
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load('tidyverse','here','broom','lme4')
+
+here::i_am("analysis/study1/analysis.Rmd")
+
+set.seed(12341)
+
+```
+
+## Import data
+
+```{r}
+# puzzles_metadata.csv
+sokobanonline_data = read_csv(here('data','study1', 'full_sokobanonline_df.csv')) |>
+  select(-`...1`)
+```
+
+## 1) Summary Stats
+
+#### A) dataset: authors, collections, puzzles
+```{r}
+print(paste0("num authors: ",length(unique(sokobanonline_data$Author_Name)))) 
+print(paste0("num collections: ", length(unique(sokobanonline_data$Collection_Name)))) 
+print(paste0("num puzzles: ",length(unique(sokobanonline_data$id)))) 
+```
+
+#### B) puzzle features
+
+```{r}
+visual_features_columns = c('num_boxes', 'num_valid_tiles', 'propFloor' )
+solution_columns = c('completion_rate', 'optimal_solution_length', 'astar_iters', 'tedium')
+enjoyment_columns = c('like_rate', 'like_ratio')
+
+# Calculate summary statistics for all or selected columns
+summary_stats <- sokobanonline_data |> 
+  pivot_longer(
+    cols = c(visual_features_columns, solution_columns, enjoyment_columns),
+    names_to = "Variable",
+    values_to = "Value"
+  ) |>
+  group_by(Variable) |> 
+  summarise(
+    mean = mean(Value, na.rm = TRUE),
+    median = median(Value, na.rm = TRUE),
+    sd = sd(Value, na.rm = TRUE),
+    min = min(Value, na.rm = TRUE),
+    max = max(Value, na.rm = TRUE)
+  )
+
+# View results
+print(summary_stats)
+
+```
+
+## 2) Correlations with Like Rate
+
+### A) cook's distance (high leverage points)
+
+```{r}
+model <- lm(like_rate ~ propFloor, data = sokobanonline_data)
+cooksD <- cooks.distance(model)
+influential <- cooksD[(cooksD > (3 * mean(cooksD, na.rm = TRUE)))]
+names_of_influential <- names(influential)
+
+# subset(sokobanonline_data, row.names(sokobanonline_data) %in% names_of_influential) |>
+#   pull(id)
+```
+
+
+### B) correlations (removing high leverage points)
+
+```{r}
+pearson_noinfluence <- function(df, variable) {
+  # Construct formula dynamically
+  formula <- reformulate(variable, response = "like_rate")
+  # Fit the first model
+  model1 <- lm(formula, data = df)
+  # Calculate Cook's Distance
+  cooksD <- cooks.distance(model1)
+  # Identify influential points
+  threshold <- 3 * mean(cooksD, na.rm = TRUE)
+  influential <- which(cooksD > threshold)  # Get row indices
+  # Subset data excluding influential points
+  df2 <- df[-influential, , drop = FALSE]  # Drop influential rows safely
+  # Fit the second model on filtered data
+  model2 <- lm(formula, data = df2)
+  
+  pearson_corr = cor.test(df2$like_rate, df2[[variable]])
+  
+  return(tibble(r = sqrt(summary(model2)$r.squared),
+              varname = variable,
+              tidy(pearson_corr)#$estimate[[1]]
+              #r.p = summary(model2)$coefficients[, 4][[2]]
+              ))
+  }
+
+
+results_df <- tibble(vars= c("num_valid_tiles", "propFloor", "num_boxes", "tedium", "astar_iters")) |>
+  mutate(result = lapply(vars, function(var) pearson_noinfluence(sokobanonline_data, variable = var))) |>
+  unnest() |>
+  select(-varname, - alternative)
+
+print(results_df)
+
+```
+
+### C) correlation bar plot (fig 3A)
+
+```{r}
+var_order <- c("astar_iters","tedium", "num_boxes", "propFloor","num_valid_tiles")
+
+results_df <- results_df |> mutate(
+  star_x = ifelse(estimate >= 0, estimate + 0.02, estimate - 0.02)
+)
+
+
+bar_pearson_like = ggplot(results_df |>  mutate(vars = factor(vars, levels = var_order)),
+                          aes(x = estimate,
+                          y = vars)) +
+  geom_bar(stat = "identity", width = 0.8) +
+  geom_text(
+    # Add stars for significant p-values
+    data = results_df |> filter(p.value < 0.05) |> mutate(vars = factor(vars, levels = var_order)),
+    aes(label = "*", x = star_x),  
+    vjust = 0.8, hjust = 0, size = 10) +
+  scale_x_continuous(
+    limits = c(-0.35, 0.35),  # Keep same x-axis limits
+    breaks = seq(-0.4, 0.4, by = 0.1)  
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor.x = element_blank(),
+        axis.line = element_line(color = "black", linewidth = .5))
+
+bar_pearson_like
+```
+
+## 3) Modeling with Like Rate 
+
+### A) like rate ~ completion rate & (completion rate)^2
+
+```{r}
+likeRate_model = lm(
+  like_rate ~ 1,
+  data = sokobanonline_data
+)
+
+likeRate_Completion_model = lm(
+  like_rate ~ 1 + 
+    completion_rate,
+  data = sokobanonline_data
+)
+
+anova(likeRate_model, likeRate_Completion_model)
+
+likeRate_CompletionSq_model <- lm(
+  like_rate ~ 1 +
+    completion_rate +
+    I(completion_rate^2), 
+  data = sokobanonline_data
+)
+
+anova(likeRate_Completion_model, likeRate_CompletionSq_model)
+```
+
+### B) like rate ~ other features 
+
+```{r}
+likeRate_visualFeatures_model <- lm(
+  like_rate ~ 1 +
+    propFloor + 
+    num_valid_tiles +
+    num_boxes, 
+  data = sokobanonline_data
+)
+
+anova(likeRate_model, likeRate_visualFeatures_model)
+print(paste0('adjusted R^2:', summary(likeRate_visualFeatures_model)$adj.r.squared))
+
+likeRate_AllFeatures_model <- lm(
+  like_rate ~ 1 +
+    propFloor + 
+    num_valid_tiles +
+    num_boxes +
+    completion_rate + 
+    optimal_solution_length +
+    astar_iters + 
+    tedium, 
+  data = sokobanonline_data
+)
+
+anova(likeRate_model, likeRate_AllFeatures_model)
+print(paste0('adjusted R^2:', summary(likeRate_AllFeatures_model)$adj.r.squared))
+```
+
+### C) plotting marginal histogram (fig 3B)
+
+```{r}
+jc_theme = theme(base_size=20,
+  plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"),
+  plot.background = element_rect(fill = "white", color = NA),
+  plot.title = element_text(
+    size = 11, face = "bold",
+    hjust = 0.5,
+    margin = margin(b = 15)
+  ),
+  axis.line = element_line(color = "black", linewidth = .5),
+  axis.title = element_text(
+    size = 14, color = "black",
+    face = "bold",
+    # family="Avenir"
+  ),
+  axis.text = element_text(size = 9, color = "black"),
+  axis.text.x = element_text(margin = margin(t = 5)),
+  axis.title.y = element_text(margin = margin(r = 5)),
+  axis.ticks = element_line(size = .5)#,
+  )
+```
+
+```{r, fig.height = 3, fig.width = 3}
+line_color = "orange"
+histogram_plot = ggplot(sokobanonline_data, aes(x = completion_rate, 
+                                                            y = like_rate,
+                                                            color = num_boxes
+                                                              )) + 
+  geom_point(alpha = 1, shape = 16, size = 1.25) +
+  scale_color_gradient(low = "grey80", high = "black", breaks = seq(1, 11, by = 1)) + 
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), color = line_color, se= TRUE,fill = line_color, alpha = 0.2) +
+  scale_y_continuous(labels = scales::percent) +  scale_x_continuous(labels = scales::percent) +
+  labs(
+    title = "",
+    x = 'Completion Rate',
+    y = 'Like Rate'#,
+  ) +
+  jc_theme +
+  theme(
+    legend.position = c(0.05, 0.95),  
+    legend.justification = c(0, 1),  
+    legend.direction = "horizontal",  
+    legend.text = element_text(size = 6), 
+    legend.key.size = unit(0.5, "lines"),  
+    legend.spacing.x = unit(0.2, "lines"), 
+    legend.margin = margin(t = -5, r = -5, b = -5, l = -5) 
+  )
+
+marginal_histogram = ggExtra::ggMarginal(histogram_plot, type = "histogram")
+
+marginal_histogram
+
+```
