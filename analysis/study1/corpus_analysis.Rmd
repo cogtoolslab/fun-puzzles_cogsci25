@@ -19,7 +19,7 @@ rm(list=ls())
 if(!require("pacman")) install.packages("pacman")
 pacman::p_load('tidyverse','here','broom','lme4')
 
-here::i_am("analysis/study1/analysis.Rmd")
+here::i_am("analysis/study1/corpus_analysis.Rmd")
 
 set.seed(12341)
 
