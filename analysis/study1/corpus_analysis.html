@@ -2808,9 +2808,19 @@ sokobanonline_data = read_csv(here(&#39;data&#39;,&#39;study1&#39;, &#39;full_so
 <pre><code>## [1] &quot;num collections: 53&quot;</code></pre>
 <pre class="r"><code>print(paste0(&quot;num puzzles: &quot;,length(unique(sokobanonline_data$id)))) </code></pre>
 <pre><code>## [1] &quot;num puzzles: 442&quot;</code></pre>
+<pre class="r"><code>print(paste0(&quot;num reactions: &quot;,sum(sokobanonline_data$num_reactions)))</code></pre>
+<pre><code>## [1] &quot;num reactions: 4031&quot;</code></pre>
+<pre class="r"><code>print(paste0(&quot;num likes: &quot;,sum(sokobanonline_data$likes)))</code></pre>
+<pre><code>## [1] &quot;num likes: 3929&quot;</code></pre>
 </div>
 <div id="b-puzzle-features" class="section level4">
 <h4>B) puzzle features</h4>
+<ul>
+<li>prop_floor = “openess”</li>
+<li>num_valid_tiles = “puzzle area”</li>
+<li>tedium = “steps per box”</li>
+<li>astar_iters = “search complexity”</li>
+</ul>
 <pre class="r"><code>visual_features_columns = c(&#39;num_boxes&#39;, &#39;num_valid_tiles&#39;, &#39;propFloor&#39; )
 solution_columns = c(&#39;completion_rate&#39;, &#39;optimal_solution_length&#39;, &#39;astar_iters&#39;, &#39;tedium&#39;)
 enjoyment_columns = c(&#39;like_rate&#39;, &#39;like_ratio&#39;)

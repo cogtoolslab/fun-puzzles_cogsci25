@@ -40,9 +40,16 @@ sokobanonline_data = read_csv(here('data','study1', 'full_sokobanonline_df.csv')
 print(paste0("num authors: ",length(unique(sokobanonline_data$Author_Name)))) 
 print(paste0("num collections: ", length(unique(sokobanonline_data$Collection_Name)))) 
 print(paste0("num puzzles: ",length(unique(sokobanonline_data$id)))) 
+print(paste0("num reactions: ",sum(sokobanonline_data$num_reactions)))
+print(paste0("num likes: ",sum(sokobanonline_data$likes)))
 ```
 
 #### B) puzzle features
+
+- prop_floor = "openess"
+- num_valid_tiles = "puzzle area"
+- tedium = "steps per box"
+- astar_iters = "search complexity"
 
 ```{r}
 visual_features_columns = c('num_boxes', 'num_valid_tiles', 'propFloor' )
