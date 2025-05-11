@@ -1,0 +1,651 @@
+---
+title: "Ratings analyses"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+    code_folding: "hide"
+    df_print: paged
+---
+
+This notebook implements analyses of how people rated puzzles in the main phase of the experiment, i.e., after attempting the puzzle. People received 8 puzzles and had 5 minutes to solve each puzzle. Eachattempt ended when people solved the puzzle, or when 5 minutes were up.
+
+# Set up
+
+Load packages, etc 
+Load packages, ggplot themes, etc.
+
+```{r setup, include=FALSE, warning=F, message=F}
+rm(list = ls())
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  "tidyverse", "here",
+  "lme4", "tidyboot", "psych", "irr",
+  "ggpubr", "scales", "ggExtra", "ggrepel",
+  "rstatix", "lmerTest",
+  "broom", "broom.mixed", "sjPlot",
+  "emmeans"
+)
+
+options(digits = 5)
+options(scipen=99)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.height = 4,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+Parameters
+
+```{r}
+set.seed(12341)
+
+here::i_am("analysis/study2/02_analyze-ratings.Rmd")
+source(here("utils/utils.R"))
+
+studyName <- "study2"
+experimentName <- "fun-puzzles-exp1"
+iterationName <- "production2"
+
+plot_path <- here('results', 'plots', studyName)
+csv_path <- here('results', 'csv', studyName)
+data_path <- here('data', studyName)
+```
+
+Analyzing experiment iteration `iterationName`.
+
+## Import data
+
+Corpus metadata
+
+```{r}
+# import corpus data
+df.glean <- read_csv(here('stimuli', 'study2', 'fun-puzzles-exp1',
+                       str_c(iterationName, '_puzzles-test.csv'))) %>%
+  mutate(puzzle_shortid = str_c(str_sub(collection_name, 1, 7), level_name, sep=" ")) %>%
+  select(stimuli_set, puzzle_id, puzzle_shortid, layout, enjoyment_cat, difficulty_cat, shortestPath_cat) %>%
+  left_join(select(read_csv(here('results', 'csv', 'study1','full_sokobanonline_df_FINAL.csv')),
+                    -`...1`), 
+            by=c("layout")) %>%
+  rename(astar_solution = optimal_solution,
+         astar_solution_length = optimal_solution_length,
+         astar_solution_string = optimal_solution_string,
+         astar_tedium = tedium)
+# preview
+head(df.glean, 3)
+```
+
+Read in included participant IDs for analysis
+
+```{r}
+participants <- read_csv(here(csv_path, 
+                         str_c(iterationName, '_participant-mElo-long.csv'))) %>%
+  pull(gameID) %>% unique()
+```
+
+We have `r length(participants)` unique participants. Read trial-level ratings: 
+
+```{r}
+df.ratings <- read_csv(here(data_path,
+                         str_c(iterationName, "_testTrials.csv"))) %>%
+  filter(gameID %in% participants) %>%
+  mutate(puzzle_shortid = str_c(str_sub(collection_name, 1, 7), level_name, sep=" "),
+         level_name = as.character(level_name)) %>%
+  select(-c(author_name:start_position.y))
+  
+head(df.ratings)
+```
+
+Read in rating stats for each puzzle and merge with gleaned measures:
+
+```{r}
+df.puzzles <- read_csv(here(csv_path,
+                         str_c(iterationName, '_puzzle-summary.csv'))) %>%
+  rename(puzzle_shortid=puzzle_id) %>%
+  # add stimuli set label
+  left_join(select(df.ratings, puzzle_shortid, stimuli_set) %>% unique()) %>%
+  # add gleaned measures
+  left_join(df.glean)#, by=c('puzzle_shortid', 'stimuli_set'))
+head(df.puzzles)
+```
+
+now add puzzle stats to ratings for regression analyses
+
+```{r}
+df.ratings <- df.ratings %>%
+  left_join(select(df.puzzles,
+                   puzzle_shortid, puzzle_id, condition, rating_meanBoot:like_ratio) %>% distinct())
+```
+
+# 1. Inter-rater consistency of puzzle ratings
+
+## 1a/b: reliability
+
+Hypotheses: 
+
+a. If puzzle difficulty or enjoyment can be reliably estimated from viewing a puzzle, then ratings from different participants should show high consistency (i.e., high inter-rater reliability) for individual puzzles across a diverse set of puzzles. Average ratings should be invariant to which raters are used (e.g., low leave-one-out error)
+b. If puzzle enjoyment involves a noisier or more subjective assessment than puzzle difficulty, then inter-rater reliability for enjoyment should be lower than for difficulty.
+
+#### Split Half reliability
+
+We measured internal consistency using (Spearman-Brown corrected) split half reliability from classical test theory.
+
+Additionally, we bootstrap over 10k different splits to obtain estimates of uncertainty.
+
+```{r}
+(ratings_shr_summary <- read_csv(here(csv_path, str_c(iterationName, "_ratings-reliability-summary.csv"))))
+```
+
+Compute mean SHR of the three enjoyment sets:
+
+```{r}
+ratings_shr_summary %>% group_by(condition) %>%
+  summarise(mean_shr = mean(shr_mean)) %>%
+  mutate(r.squared = mean_shr^2)
+```
+
+
+#### Standard deviation
+
+Another way to assess spread is the observed *standard deviation* around ratings in each condition.
+
+Let's inspect the mean and bootstrapped 95% CIs of SD within each stimuli set. Check that stimuli set aren't that different.
+
+```{r}
+df.puzzles %>%
+  group_by(condition, stimuli_set) %>%
+  tidyboot_mean(rating_sd)
+```
+
+Overall
+```{r}
+df.puzzles %>%
+  group_by(condition) %>%
+  tidyboot_mean(rating_sd)
+```
+
+plot
+
+```{r}
+ggpaired(df.puzzles,
+  x = "condition", y = "rating_sd", id = "puzzle_id",
+  fill = "condition", palette = "jco", line.color = "gray"
+) +
+  stat_compare_means(method = "t.test", paired = TRUE) + # stat_compare_means(method = "t.test")
+  guides(fill = "none") +
+  labs(
+    y = "Standard Deviation per puzzle", title = "Are raters more consistent when judging difficulty or fun?",
+    caption = "Each dot is one puzzle"
+  )
+```
+
+## 1c. What is the relationship between difficuty and fun ratings?
+
+3. **We expect puzzle enjoyment to be correlated with puzzle difficulty.** Based on related work, we expect that puzzle enjoyment has a U-shape relationship with puzzle difficulty, with the greatest enjoyment for puzzles at moderate levels of difficulty and less enjoyment for levels that are too easy or too difficult. However, for a novel domain it is unclear how a “moderate” difficulty level should be defined. Thus, we will test for both linear and quadratic relationships between puzzle difficulty and enjoyment.
+
+#### Figure 5A 
+
+Scatter plot per puzzle
+
+```{r fig.height=4, fig.width=4}
+puzzles_wide <- df.puzzles %>%
+  select(condition, puzzle_id, rating_mean, rating_ciLo, rating_ciHi) %>%
+  unique() %>%
+    pivot_wider(names_from = condition, values_from = c(rating_mean, rating_ciLo, rating_ciHi)) %>%
+  left_join(df.glean, by=c("puzzle_id"))
+  
+puzzles_wide %>%
+  ggplot(aes(x = rating_mean_difficult, y = rating_mean_enjoyable)) +
+  geom_errorbar(aes(ymin = rating_ciLo_enjoyable, ymax = rating_ciHi_enjoyable), color = CONDITION_COLORS[['enjoyable']], alpha = 0.5) +
+  geom_errorbarh(aes(xmin = rating_ciLo_difficult, xmax = rating_ciHi_difficult), color = CONDITION_COLORS[['difficult']], alpha = 0.5) +
+  geom_point(size = 3, shape = 21, fill = "grey50") +
+  scale_x_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Difficulty") +
+  scale_y_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Enjoyment") +
+  theme(base_size = 20)
+  # coord_equal() +
+  # labs(
+  #   caption = "Each point represents a puzzle\nError bars show 95% CI"
+  # )
+
+ggsave(here(plot_path, str_c(experimentName, "_ratings-scatter.pdf")),
+            dpi=300,
+       width=3, height=3)
+
+```
+
+This looks quite linear! Compute Pearson's rho:
+
+```{r}
+cor.test(puzzles_wide$rating_mean_enjoyable, puzzles_wide$rating_mean_difficult) %>% tidy()
+```
+
+For completeness, let's compare the linear and quadratic models:
+
+```{r}
+model1c_linear <- lm(rating_mean_enjoyable ~ rating_mean_difficult, data=puzzles_wide)
+model1c_quad <- lm(rating_mean_enjoyable ~ rating_mean_difficult + I(rating_mean_difficult^2), data=puzzles_wide)
+
+anova(model1c_linear, model1c_quad)
+```
+
+Report the linear model:
+
+```{r}
+summary(model1c_linear)
+```
+
+
+# 2. Comparing participant ratings with corpus analysis:
+
+a. To what extent do self-report difficulty ratings converge with corpus-derived difficulty measures (completion rate)?
+b. To what extent do self-report enjoyment ratings converge with corpus-derived enjoyment (like rate)?
+c. How does the relationship between enjoyment and difficulty ratings compare between participant-derived and corpus-derived data?
+
+## 2a. Ratings vs. completion rate
+
+
+Difficulty vs completion rate
+
+```{r fig.height=4, fig.width=4}
+puzzles_wide %>%
+  ggplot(aes(x = completion_rate, y = rating_mean_difficult)) +
+  geom_smooth(method="lm", color=CONDITION_COLORS[['difficult']]) +
+  geom_errorbar(aes(ymin = rating_ciLo_difficult, ymax = rating_ciHi_difficult), color = CONDITION_COLORS[['difficult']], alpha = 0.7) +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  scale_y_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Difficulty") +
+  labs(
+    caption = "Each point represents a puzzle\nError bars show 95% CI",
+    x = "Corpus Completion Rate"
+  )
+```
+
+
+## 2b. Ratings vs like rate
+
+We expect a positive correlation between experimentally-measured puzzle enjoyment ratings and corpus-derived enjoyment (i.e., % liked)
+
+Enjoyment:
+```{r fig.height=4, fig.width=4}
+puzzles_wide %>%
+  ggplot(aes(x = like_rate, y = rating_mean_enjoyable)) +
+  geom_smooth(method="lm", color=CONDITION_COLORS[['enjoyable']]) +
+  geom_errorbar(aes(ymin = rating_ciLo_enjoyable, ymax = rating_ciHi_enjoyable), color = CONDITION_COLORS[['enjoyable']], alpha = 0.7) +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  scale_y_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Enjoyment") +
+  labs(
+    caption = "Each point represents a puzzle\nError bars show 95% CI",
+    x = "Corpus Like Rate"
+  )
+```
+Difficulty
+```{r fig.height=4, fig.width=4}
+puzzles_wide %>%
+ggplot(aes(x = like_rate, y = rating_mean_difficult)) +
+  geom_smooth(method="lm", color=CONDITION_COLORS[['difficult']]) +
+  geom_errorbar(aes(ymin = rating_ciLo_difficult, ymax = rating_ciHi_difficult), color = CONDITION_COLORS[['difficult']], alpha = 0.7) +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  scale_y_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Difficulty") +
+  labs(
+    caption = "Each point represents a puzzle\nError bars show 95% CI",
+    x = "Corpus Like Rate"
+  )
+```
+
+print correlation outputs
+
+```{r}
+cor.test(~ rating_mean + like_rate, data=filter(df.puzzles, condition=="enjoyable"))
+cor.test(~ rating_mean + like_rate, data=filter(df.puzzles, condition=="enjoyable"),
+         method="spearman")
+```
+
+## 2c. Difficulty ~ Enjoyment relationship 
+
+We expect a similar relationship (fun ~ difficulty) to be found across both experimental and corpus datasets
+
+In the experiment, participant-reported enjoyment and difficulty (between-subjects) showed a strong linear relationship.
+
+In the glean dataset, we saw a quadratic relationship across all 400+ puzzles. Now, let's zoom in on the 24 puzzles in the online corpus: 
+
+```{r}
+df.glean %>%
+  ggplot(aes(x = completion_rate, y=like_rate)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  labs(
+    caption = "Each point represents a puzzle\nError bars show 95% CI",
+    x = "Corpus Completion rate",
+    y = "Corpus Like rate"
+  )
+```
+Correlations:
+
+```{r}
+cor.test(~like_rate + completion_rate, data=df.glean, method="pearson")
+
+cor.test(~like_rate + completion_rate, data=df.glean, method="spearman")
+```
+
+Test quadratic fit: 
+```{r}
+model2c.1 <- lm(like_rate ~ completion_rate, data=df.glean)
+model2c.2 <- lm(like_rate ~ completion_rate + I(completion_rate^2), data=df.glean)
+anova(model2c.2, model2c.1) # n.s.
+```
+
+Now looked at self-report enjoyment:
+
+```{r fig.height=4, fig.width=4}
+puzzles_wide %>%
+  ggplot(aes(x = completion_rate, y = rating_mean_enjoyable)) +
+  geom_smooth(method="lm", color=CONDITION_COLORS[['enjoyable']]) +
+  geom_errorbar(aes(ymin = rating_ciLo_enjoyable, ymax = rating_ciHi_enjoyable), color = CONDITION_COLORS[['enjoyable']], alpha = 0.7) +
+  geom_point(size = 3, shape = 21, fill = "white") +
+  scale_y_continuous(#limits=c(1,10), 
+                     breaks = seq(1, 10, 1), name = "Rated Enjoyment") +
+  labs(
+    caption = "Each point represents a puzzle\nError bars show 95% CI",
+    x = "Corpus Completion Rate"
+  )
+
+```
+
+
+
+# 3 What predicts enjoyment ratings across puzzles?
+
+1. Visual - number of floor tiles
+2. Visual - proportion of floor tiles = (floor - box) / (floor + wall)
+3. Solution - astar_solution_length
+4. Solution - astar_iters
+5. Trace - is_completed
+6. Trace - steps taken
+
+`lmer(rating ~ value + (1|puzzle_id) + (1|gameID), 
+     data=df, REML=reml)`
+
+#### Correlations to mean enjoyment rating
+
+aggregating within puzzles
+
+```{r}
+agg.fun.nest <- df.puzzles %>%
+  filter(condition=="enjoyable") %>%
+  select(puzzle_id, rating_mean, 
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters,
+         completion_rate, like_rate
+         ) %>%
+  pivot_longer(numFloor:like_rate,
+               names_to = "predictor",
+               values_to = "value") %>%
+  group_by(predictor) %>%
+  nest()
+# preview
+# agg.difficulty.nest$data
+
+agg.fun.nest <- mutate(agg.fun.nest, 
+                       pearson = map(data, cor_function, x='rating_mean', y='value'),
+                       spearman = map(data, cor_function, x='rating_mean', y='value', r_method='spearman'))
+
+(corr_fun_pearson <- select(agg.fun.nest, predictor, pearson) |> unnest())
+(corr_fun_spearman <- select(agg.fun.nest, predictor, spearman) |> unnest())
+```
+
+#### Linear regression
+
+
+make df; scale continuous measures to z-scores, but keep discrete ones (isSolved, boxesSolved)
+
+```{r}
+d.fun <- df.ratings %>%
+  filter(condition=="enjoyable") %>%
+  select(puzzle_id, gameID, rate_response, 
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters,
+         solved, attempt_nsteps,
+         completion_rate, like_rate) %>%
+  mutate(across(.cols=c(numFloor, propFloor, astar_solution_length, astar_iters, attempt_nsteps,
+                        completion_rate, like_rate),
+                scale))
+```
+
+Max R^2 is internal consistency, which is approximately 0.85^2 = 0.7225 for enjoyment ratings.
+
+```{r}
+lm.fun.visual <- lm(rate_response ~ numFloor + propFloor, data=d.fun)
+lm.fun.solution <- lm(rate_response ~ astar_solution_length + astar_iters, data=d.fun)
+lm.fun.completion <- lm(rate_response ~ completion_rate, data=d.fun)
+lm.fun.visual.solution <- lm(rate_response ~ numFloor + propFloor + 
+                              astar_solution_length + astar_iters, 
+                            data=d.fun)
+lm.fun.visual.solution.completion <- lm(rate_response ~ numFloor + propFloor + 
+                              astar_solution_length + astar_iters + completion_rate ,
+                            data=d.fun)
+
+(lm.fun.list <- tibble(model_name = c('visual', 'solution', 
+                                       'visual.solution', 
+                                      'completion',
+                                      'visual.solution.completion'),
+                       models = list(lm.fun.visual, lm.fun.solution, 
+                                  lm.fun.visual.solution, 
+                                  lm.fun.completion,
+                                  lm.fun.visual.solution.completion)) %>%
+  mutate(glance = map(models, glance)) %>%
+  select(model_name, glance) %>%
+  unnest(cols=c(glance)) %>%
+    relocate(model_name, AIC))
+```
+
+Plot those R-squares with maximal R-square up top
+
+```{r}
+lm.fun.list %>%
+  mutate(n = row_number()) %>%
+  mutate(model_name = factor(model_name, 
+                             levels=c('visual', 'solution', 
+                                       'visual.solution', 
+                                      'completion',
+                                      'visual.solution.completion'),
+                             ordered=T)) %>%
+  ggplot(aes(x=model_name, y = adj.r.squared)) +
+  geom_point() +
+  geom_hline(yintercept = 0.72)
+  # geom_segment(aes(x = as.numeric(model_name) - .45, 
+                   # xend=as.numeric(model_name) - .45, 
+                   # yend = AIC), size = 1)
+```
+
+Inspect full model
+
+```{r}
+summary(lm.fun.visual.solution.completion)
+```
+
+# 4 What predicts enjoyment ratings across participants and attempts? 
+
+
+#### LME single features
+
+`lmer(rating ~ value + (1|puzzle_id) + (1|gameID), 
+     data=df, REML=reml)`
+     
+
+#### single variables
+```{r}
+d.fun.nest <- d.fun %>%
+  mutate(y = rate_response) %>%
+  pivot_longer(numFloor:like_rate,
+               names_to = "predictor",
+               values_to = "x") %>%
+  group_by(predictor) %>%
+  nest()
+
+d.fun.nest <- d.fun.nest %>% 
+  mutate(model = map(data, lme_1_function))
+
+(lme_fun.glance <- d.fun.nest %>%
+  mutate(tidymodel = map(model, lme_summary)) %>%
+  select(-data, -model) %>%
+  unnest(cols=c(tidymodel)) %>%
+    relocate(predictor, AIC, R2_marginal, R2_conditional))
+```
+
+#### Build puzzle models
+
+```{r}
+fun.null <- lmer(rate_response ~ 1 + 
+                   (1|puzzle_id) + (1|gameID),data=d.fun)
+fun.visual <- lmer(rate_response ~ numFloor + propFloor +
+                     (1|puzzle_id) + (1|gameID), data=d.fun)
+fun.solution <- lmer(rate_response ~ astar_solution_length + astar_iters + 
+                       (1|puzzle_id) + (1|gameID),data=d.fun)
+fun.completion <- lmer(rate_response ~ completion_rate 
+                       + (1|puzzle_id) + (1|gameID),data=d.fun)
+fun.visual.solution.completion <- lmer(rate_response ~ numFloor + propFloor + 
+                              astar_solution_length + astar_iters + completion_rate + 
+                                (1|puzzle_id) + (1|gameID),data=d.fun)
+AIC(fun.null, fun.visual, fun.solution, fun.completion, fun.visual.solution.completion)
+```
+
+controlling for visual features, add steps and solved
+
+```{r}
+fun.steps <- lmer(rate_response ~ numFloor + propFloor + 
+                   astar_solution_length + astar_iters + completion_rate+
+                   attempt_nsteps + (1|puzzle_id) + (1|gameID),
+                 data=d.fun)
+fun.solved <- lmer(rate_response ~ numFloor + propFloor + 
+                   astar_solution_length + astar_iters + completion_rate+
+                   solved + (1|puzzle_id) + (1|gameID),
+                 data=d.fun)
+fun.solved.steps <- lmer(rate_response ~ numFloor + propFloor + 
+                   astar_solution_length + astar_iters + completion_rate+
+                   solved + attempt_nsteps + (1|puzzle_id) + (1|gameID),
+                 data=d.fun)
+fun.max <- lmer(rate_response ~ numFloor + propFloor + 
+                   astar_solution_length + astar_iters + completion_rate+
+                   solved * attempt_nsteps + (1|puzzle_id) + (1|gameID),
+                 data=d.fun)
+AIC(fun.steps,fun.solved,fun.solved.steps,fun.max)
+
+anova(fun.solved.steps, fun.max) # success vs success +interaction
+```
+
+#### compare models
+
+```{r}
+(fun.lme.list <- tibble(model_name = c('null', 'base',
+                                       'steps', 'solved', 
+                                       'steps.solved', 'steps.solved.int'),
+                       models = c(fun.null, fun.visual.solution.completion, 
+                                  fun.steps, fun.solved, fun.solved.steps,
+                                  fun.max)) %>%
+  mutate(tidy_model = map(models, lme_summary)) %>%
+  select(model_name, tidy_model) %>%
+  unnest(cols=c(tidy_model)) %>%
+    relocate(AIC, R2_marginal, R2_conditional))
+```
+
+#### Figure 5B
+
+AIC
+
+```{r fig.height=4, fig.width=8}
+fun.lme.list %>%
+  filter(model_name %in% c('null', 'base',
+                                       'steps', 'solved', 
+                                        'steps.solved', 
+                           'steps.solved.int')) %>%
+  mutate(model_name = factor(model_name, 
+                             levels=c('null', 'base',
+                                       'steps', 'solved', 
+                                        'steps.solved', 
+                                      'steps.solved.int'
+                                      ),
+                             ordered=T)) %>%
+  arrange(model_name) %>%
+  mutate(n = row_number()) %>%
+  ggplot(aes(x=model_name, y = AIC)) +
+  geom_point(color=NA) +
+  # geom_hline(yintercept=fun.lme.nullAIC, linetype="dashed")+
+  geom_segment(aes(x = n - 0.4,
+                   xend= n+0.4,
+                   yend = AIC), size = 1) +
+  scale_y_continuous(limits = c(4000,4600)) +
+    theme(axis.text.x = element_text(angle = 90),
+          axis.line.x=element_blank())
+```
+
+
+#### Summary of full model
+
+
+- fit model allowing trace effects to vary by puzzle and person
+
+```{r}
+fun.lmm.full <- lmer(rate_response ~ numFloor + propFloor + 
+                  astar_solution_length + astar_iters +
+                  completion_rate + 
+                  solved + attempt_nsteps +
+                    solved:attempt_nsteps +
+                    (1+ puzzle_id) + (1|gameID),
+                  # (1+ solved |puzzle_id) + (1|gameID), # no conditional R2
+                  control=lmerControl(optimizer="bobyqa"),
+                data=d.fun)
+lme_summary(fun.lmm.full)
+performance::r2_nakagawa(fun.lmm.full)
+```
+
+#### Figure 5C
+
+```{r}
+# get model predictions 
+break_limits <- range(d.fun$attempt_nsteps)
+break_limits_real <- un_zscale(break_limits, scaled_term=d.fun$attempt_nsteps)
+break_vals_real <- scales::pretty_breaks(n=5)(break_limits_real)
+break_vals = re_zscale(break_vals_real,
+                       scaled_term=d.fun$attempt_nsteps)
+
+dat <- ggeffects::ggpredict(
+      model = fun.max,
+      terms = list(attempt_nsteps = break_limits, solved = c(0,1)),
+      full.data = FALSE
+    )
+
+ggplot(dat, aes(x=x, y=predicted)) +
+  geom_point(data=d.fun, aes(y=rate_response, x=attempt_nsteps, color=as.factor(solved)),
+             alpha=0.1, position=position_jitter(height=0.2, seed=5),
+             shape=16) +
+  geom_ribbon(aes(ymin = conf.low, ymax=conf.high,fill=group), alpha=0.2) +
+  geom_line(aes(color=group), size=1.5) +
+  scale_color_brewer(palette = "Set1") +
+  scale_fill_brewer(palette ="Set1")+
+  scale_x_continuous(#limits = break_limits,
+                     breaks= break_vals,
+                     labels= break_vals_real)+
+  scale_y_continuous(limits = c(1,10), breaks=c(1:10))+
+  labs(x = "Steps taken", y = "Rated enjoyment") +
+  theme(legend.position = "none")
+
+ggsave(here(plot_path, str_c(experimentName, "_interaction.pdf")),
+            dpi=300,
+       width=3, height=3)
+
+```
+
+# Session info
+```{r}
+sessionInfo()
+```
+

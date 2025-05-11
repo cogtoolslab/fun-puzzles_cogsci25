@@ -1,0 +1,776 @@
+---
+title: "Fun Puzzles: Make tidy dataframes"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+    code_folding: "hide"
+    df_print: paged
+---
+
+# Set up
+
+Load packages, ggplot themes, etc.
+
+```{r setup, include=FALSE, warning=F, message=F}
+rm(list = ls())
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  "tidyverse", "here",
+  "lme4", "tidyboot", "boot", 
+  "ggpubr", "scales", "ggExtra", "ggrepel",
+  "rstatix", "lmerTest",
+  "broom", "broom.mixed", "sjPlot",
+  "emmeans", "EloChoice"
+)
+here::i_am("analysis/study2/01_make_results_dataframes.Rmd")
+
+source(here("utils/utils.R"))
+
+csv_path <- here("results", "csv", "study2")
+
+options(digits = 5)
+set.seed(12341)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.height = 4,
+	fig.width = 6,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+### Study Parameters
+
+```{r}
+iterationName <- "production2"
+nRuns_elo_permute = 1000
+nBootIter = 1000
+splitIters = 10000
+```
+
+This is iteration *`r iterationName`*.
+
+### Stimuli metadata
+
+```{r}
+stimuli <- read_csv(here("stimuli", "study2", "fun-puzzles-exp1", paste0(iterationName, "_puzzles-test.csv")))
+stimuli %>% head()
+```
+
+We imported metadata about `r nrow(stimuli)` puzzles. 
+
+### Tabulate exclusion reasons
+
+```{r}
+exclusions <- read_csv(here("data", "study2", paste(iterationName, "exclusions.csv", sep = "_")))
+```
+
+There are `r length(unique(exclusions$gameID))` sessions excluded, see reasons below. 
+Note, some sessions met multiple exclusion criteria. 
+It's not possible to skip trials, rather, missing data reflect tech issues.
+
+```{r}
+exclusions %>% count(reasons)
+```
+
+## Import data
+
+### exit survey
+
+Import exit survey
+
+```{r}
+survey <- read_csv(here("data", "study2", paste(iterationName, "survey.csv", sep = "_"))) %>%
+  mutate(
+    judgedDifficulty = factor(judgedDifficulty, levels = c(1, 2, 3, 4, 5), labels = c("1\nVery Easy", "2", "3", "4", "5\nVery Hard")),
+    participantEffort = factor(participantEffort, levels = c(1, 2, 3, 4, 5), labels = c("1\nVery Low", "2", "3", "4", "5\nVery High")),
+    sokobanFamiliarity = factor(sokobanFamiliarity, levels = c(0, 1, 2, 3), labels = c("Never", "A few times", "Several times", "Very familiar")),
+    gamingFrequency = factor(gamingFrequency, levels = c(0, 1, 2, 3, 4), labels = c("None", "< 1h", "1-5h", "6-10h", "> 10h"))
+  ) %>%
+  filter(!gameID %in% exclusions$gameID)
+
+head(survey)
+```
+
+### experimental data
+
+We have 8 test trials. Compute some summary statistics:
+
+```{r}
+testTrials <- read_csv(here("data", "study2", paste(iterationName, "testTrials.csv", sep = "_"))) %>%
+  filter(!gameID %in% exclusions$gameID) %>%
+  mutate(puzzle_id = paste(str_sub(collection_name, 1, 7), level_name)) %>%
+  rename(rating = rate_response,
+         ratingRT = rate_rt)
+
+# summary
+rating_summary <- testTrials %>%
+  # bootstrap ci
+  group_by(stimuli_set, puzzle_id, condition) %>%
+  tidyboot_mean(rating, na.rm = T) %>%
+  ungroup() %>%
+  # median, sd, etc.
+  left_join(summarizer(testTrials, target_cols = c(rating), 
+                       puzzle_id, condition) %>%
+              select(-ends_with('mean')),
+            by=c("puzzle_id", "condition")
+            ) %>%
+  rename(rating_meanBoot = empirical_stat, 
+         rating_mean = mean,
+         rating_ciLo = ci_lower,
+         rating_ciHi = ci_upper)
+
+# add avg ratings to test trials df
+testTrials <- testTrials %>%
+  left_join(rating_summary %>%
+              select(condition, puzzle_id, rating_mean) %>%
+    pivot_wider(names_from = condition, values_from = rating_mean)) %>%
+  rename(mean_difficult = difficult,
+         mean_enjoyable = enjoyable) %>%
+  mutate(puzzle_id_sorted = reorder(puzzle_id, mean_difficult))
+
+head(rating_summary)
+```
+
+And 16 comparison trials (8 pretest 8 posttest)
+```{r}
+compareTrials <- read_csv(here("data", "study2", paste(iterationName, "compareTrials.csv", sep = "_"))) %>%
+  filter(!gameID %in% exclusions$gameID) %>%
+  select(gameID:level_name_1) %>%
+  mutate(
+    study_phase = factor(study_phase, levels = c("pretest", "posttest")),
+    puzzle_id_0 = paste(str_sub(collection_name_0, 1, 7), level_name_0),
+    puzzle_id_1 = paste(str_sub(collection_name_1, 1, 7), level_name_1)
+  ) %>%
+  select(-c(collection_name_0:level_name_1)) %>%
+  mutate(
+    rt_done2 = rt_done2 - rt_done1,
+    rt_choose = rt - rt_done2
+  )
+
+head(compareTrials)
+```
+
+
+# Participants
+
+Measures collected but not a target of analysis:
+
+- Demographics (age, gender, general video game experience; experience with sokoban)
+- How much effort did you put into this study?
+- How difficult was this study for you?
+- Reaction time for ratings
+
+#### Age
+
+```{r}
+survey %>%
+  group_by(condition) %>%
+  summarize(
+    n = n(),
+    M = mean(participantYears),
+    SD = sd(participantYears),
+    min = min(participantYears),
+    max = max(participantYears)
+  )
+```
+
+#### Gender
+
+```{r}
+survey %>% count(participantGender) %>%
+  mutate(perc = 100*n/sum(n)) %>% arrange(-n)
+```
+
+#### Race
+
+```{r}
+survey %>% count(participantRace) %>%
+  mutate(perc = 100*n/sum(n)) %>% arrange(-n)
+```
+
+#### Ethnicity
+
+```{r}
+survey %>% count(participantEthnicity) %>%
+  mutate(perc = 100*n/sum(n)) %>% arrange(-n)
+```
+
+#### Study experience
+
+```{r fig.height=4, fig.width=8}
+# Histogram
+# facet = measure (age, gender, experience)
+survey %>%
+  pivot_longer(c("judgedDifficulty", "participantEffort", "sokobanFamiliarity", "gamingFrequency"), names_to = "key", values_to = "value") %>%
+  ggplot(aes(value, fill = condition)) +
+  geom_bar(position = position_dodge()) +
+  facet_wrap(. ~ key, scales = "free_x", nrow = 2, drop = FALSE) +
+  theme_bw()
+```
+Familiarity
+
+```{r}
+survey %>% count(sokobanFamiliarity) %>%
+  mutate(prop = n/sum(n))
+```
+
+Effort: `r mean(as.numeric(survey$judgedDifficulty))`
+
+```{r}
+survey %>% count(judgedDifficulty) %>%
+  mutate(prop = n/sum(n))
+```
+
+# Ratings
+
+## descriptives
+
+Distribution of ratings for attempted puzzles. Are participants using the entire scale?
+
+1 = not at all; 10 = extremely
+
+```{r fig.height=3, fig.width=5}
+# histogram of ratings
+# facet by condition
+testTrials %>%
+  ggplot(aes(rating, fill = condition)) +
+  geom_bar(position = position_dodge()) +
+  scale_x_continuous(breaks = seq(1, 10, 1)) +
+  facet_wrap(. ~ condition, scales = "free", nrow = 1) +
+  guides(fill = "none") +
+  scale_fill_manual(values = CONDITION_COLORS)
+```
+
+Get counts of scale responses
+```{r}
+testTrials %>% 
+  count(condition, rating) %>%
+  group_by(condition) %>%
+  mutate(prop = n/sum(n))
+```
+
+get SDs
+```{r}
+rating_summary %>% 
+  group_by(condition) %>%
+  summarize(mean = mean(rating_mean),
+            sd = mean(rating_sd))
+```
+
+t-test of SDs
+
+```{r}
+rating_summary_wide <- rating_summary %>%
+  select(puzzle_id, condition, rating_sd) %>%
+  pivot_wider(names_from = condition, values_from=rating_sd)
+
+t.test(rating_summary_wide$difficult, rating_summary_wide$enjoyable, 
+       paired=T)
+```
+
+
+
+Plot these ratings, with Mean + SD overlaid
+
+```{r fig.height=4, fig.width=8}
+# Ratings per puzzle
+df <- rating_summary %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  mutate(ymax = rating_mean + rating_sd, 
+         ymin = rating_mean - rating_sd)
+
+miny <- min(df$ymin, na.rm = T)
+maxy <- max(df$ymax, na.rm = T)
+
+ggplot(testTrials, aes(y = rating, x = puzzle_id_sorted, fill = condition)) +
+  geom_jitter(alpha = 0.5, height = 0, width = 0.2, size=1) +
+  geom_pointrange(data = df, aes(y = rating_mean, ymin = ymin, ymax = ymax,
+                                 color=condition, fill=condition), 
+                  shape = 23, position = position_nudge(x=0.25)) +
+  facet_wrap(. ~ condition, nrow = 2) +
+  scale_y_continuous(limits = c(miny, maxy), breaks = seq(1, 10, 1)) +
+  scale_fill_manual(values = CONDITION_COLORS)+
+  scale_color_manual(values = CONDITION_COLORS)+
+  guides(fill = "none", color="none") +
+  theme(axis.text.x = element_text(size = 6, angle = 90))
+ggsave(here('results','plots','puzzle-ratings.pdf'), width = 8, height = 4, dpi=300)
+```
+
+## Split half reliability per condition
+
+Split-half reliability is splitting a test into two random halves, correlating the two halves, and adjusting the correlation with the Spearman-Brown prophecy formula.
+
+We use the psych::splitHalf function which generates a distribution of split half correlations by resampling over participants (n=10,000 samples)
+
+We run this for each condition (difficult, enjoyable) and stimuli set (A, B, C)
+
+### across stimuli sets and condition
+
+```{r}
+testTrials.nested <- testTrials %>% 
+  select(condition, stimuli_set, puzzle_id, gameID, rating) %>%
+  group_by(condition, stimuli_set) %>%
+  nest() %>%
+  mutate(data = map(data, ~ .x %>%
+    pivot_wider(
+      names_from = puzzle_id,
+      values_from = rating) %>%
+   select(-gameID)))
+
+get_shr_stats <- function(D, raw=T) {
+  shr <- psych::splitHalf(D, raw=raw,
+                        brute=F, n.sample=splitIters)
+  tibble(shr_mean = shr$meanr,
+       shr_ciLo = shr$ci[[1]],
+       shr_ciHi = shr$ci[[3]])
+}
+# testing
+# get_shr_stats(testTrials.nested$data[[1]])
+
+# run it for all conditions and stimuli sets
+(testTrials.summary <- testTrials.nested %>%
+  mutate(shr = map(data, get_shr_stats)) %>%
+  select(-data) %>%
+  unnest() %>%
+    arrange(shr_mean)
+)
+
+
+write_csv(testTrials.summary,
+          here(csv_path, str_c(iterationName, "ratings-reliability-summary.csv", sep="_")))
+
+```
+
+Average SHR for puzzle ratings ranged from `r testTrials.summary$shr_mean[1]` (95% CI[`r testTrials.summary$shr_ciLo[1]`, `r testTrials.summary$shr_ciHi[1]`]) for `r testTrials.summary$condition[1]` ratings stimuli set `r testTrials.summary$stimuli_set[1]` 
+to `r testTrials.summary$shr_mean[6]` (95% CI[`r testTrials.summary$shr_ciLo[6]`, `r testTrials.summary$shr_ciHi[6]`]) for `r testTrials.summary$condition[6]` ratings stimuli set `r testTrials.summary$stimuli_set[6]` 
+
+### across conditions
+
+```{r}
+testTrials.summary %>% 
+  ungroup() %>%
+  group_by(condition) %>%
+  summarize(across(where(is.double),
+            mean))
+```
+
+# Puzzle-solving Performance
+
+Compute average rate and duration of solutions for each puzzle and condition.
+
+```{r}
+performance_summary <- testTrials %>% 
+               group_by(puzzle_id, condition) %>%
+               summarize(solved_prop = mean(solved, na.rm=T),
+                         nParticipants = n())
+
+performance_summary <- performance_summary %>%
+  left_join(
+    testTrials %>%
+      # filter out if not solved at all, bc tidyboot can't handle empty groups
+      filter(!is.na(solveDuration)) %>%
+    group_by(puzzle_id, condition) %>%
+  # bootstrap ci
+    tidyboot_mean(solveDuration, na.rm = TRUE) %>%
+    ungroup()
+  ) %>%
+  # median, sd, etc.
+  left_join(
+    summarizer(testTrials, target_cols = c(solveDuration), 
+               puzzle_id, condition) %>%
+      select(-ends_with('mean')),
+    by=c("puzzle_id", "condition")
+    ) %>%
+  rename(solveDuration_meanBoot = empirical_stat, 
+         solveDuration_mean = mean,
+         solveDuration_ciLo = ci_lower,
+         solveDuration_ciHi = ci_upper)
+# summary by condition
+head(performance_summary)
+```
+
+Overall completion rate was `r mean(performance_summary$solved_prop)`. 
+
+What is the puzzle solution rate in the experiment? We expect some moderate success (i.e., not 0 or 100%) since these levels are designed for novices. We also expect no effect of condition.
+
+```{r}
+performance_summary %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  select(puzzle_id_sorted, condition, solved_prop) %>%
+  group_by(condition) %>%
+  pivot_wider(names_from = condition, values_from = solved_prop) %>%
+  ggplot(aes(x = difficult, y = enjoyable, color = as.integer(puzzle_id_sorted))) +
+  geom_point(size=2) +
+  coord_equal() +  geom_abline(intercept=0, slope=1) +
+  scale_color_gradient(low = "green",high= "red") +
+  labs(x = "Proportion solved (difficult)",
+       y = "proportion solved (enjoyable)",
+       caption = "colored from lowest mean difficulty rating (green) to highest (red)")
+```
+
+How long did people take to complete a puzzle? This shouldn't be affected by condition.
+
+
+```{r}
+miny <- min(performance_summary$solveDuration_ciLo, na.rm = T)
+maxy <- max(performance_summary$solveDuration_ciHi, na.rm = T)
+
+performance_summary %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  select(puzzle_id_sorted, condition, solveDuration_mean, solveDuration_ciLo, solveDuration_ciHi) %>%
+  group_by(condition) %>%
+  pivot_wider(names_from = condition, values_from = c(solveDuration_mean, solveDuration_ciLo, solveDuration_ciHi)) %>%
+  ggplot(aes(x = solveDuration_mean_difficult, y = solveDuration_mean_enjoyable, 
+             color = as.integer(puzzle_id_sorted))) +
+  geom_point(size=2) +
+  coord_equal() + geom_abline(intercept=0, slope=1) +
+  scale_color_gradient(low = "green",high= "red") +
+  labs(x = "Avg solution time (difficult)",
+       y = "Avg solution time (enjoyable)",
+       caption = "colored from lowest mean difficulty rating (green) to highest (red)")
+```
+
+# Comparison - Selection rate
+
+**selectionRate** = frequency selected / frequency presented. This will be a numeric variable, ranging from 0 to 1. Each puzzle will be presented 40 times per rating scale and measurement phase (i.e., once per participant).
+
+Compute this for each study phase
+
+```{r}
+compare_long <- compareTrials %>%
+  # grab puzzle names
+  select(gameID, condition, study_phase, trialNum, response, puzzle_id_0, puzzle_id_1) %>%
+  pivot_longer(c("puzzle_id_0", "puzzle_id_1"), names_to = "stimuli", names_prefix = "puzzle_id_", values_to = "puzzle_id") %>%
+  mutate(stimuli = as.integer(stimuli)) %>%
+  # grab viewing times
+  left_join(select(compareTrials, gameID, condition, study_phase, trialNum, response, rt_done1, rt_done2) %>%
+    pivot_longer(c(rt_done1, rt_done2), names_to = "stimuli", names_prefix = "rt_done", values_to = "viewing_time") %>%
+    mutate(stimuli = as.integer(stimuli) - 1)) %>%
+  # code selection
+  mutate(selected = ifelse(response == stimuli, 1, 0))
+
+compare_summary <- compare_long %>%
+  group_by(puzzle_id, study_phase, condition) %>%
+  summarize(selected = sum(selected), appeared = n()) %>%
+  mutate(prop_selected = selected / appeared) %>%
+  ungroup()
+
+head(compare_summary)
+```
+
+Now plot. 
+
+Some puzzles have lower difficulty scores, others harder
+
+```{r}
+ggpaired(compare_summary,
+  x = "study_phase", y = "prop_selected", id = "puzzle_id",
+  color = "condition", line.color = "gray", line.size = 0.4,
+  palette = "npg") +
+  facet_wrap(. ~ condition) +
+  guides(color = "none") +
+  labs(x = "Study Phase", y = "% selected") +
+  scale_color_manual(values = CONDITION_COLORS)
+ggsave(here('results', 'plots',"compare_summary.pdf"), width = 6, height = 3, dpi=300)
+```
+
+Above diagonal = rating increased.
+Below diagonal = rating decreased.
+Red = hardest in corpus (lowest solve rate).
+
+```{r}
+compare_summary %>% filter(condition=="difficult") %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  select(-selected, -appeared, -condition) %>%
+  pivot_wider(values_from = prop_selected, names_from = study_phase) %>%
+  ggplot() +
+  geom_point(aes(x=pretest, y=posttest, color = as.integer(puzzle_id_sorted)),
+             size=2) +
+  coord_equal()+
+  geom_abline(intercept=0, slope=1, color="grey50") +
+  scale_color_gradient(low = "green",high= "red") +
+  labs(title = "Which puzzle is more difficult? Selection rates",
+              caption = "colored from lowest mean difficulty rating (green) to highest (red)")
+```
+
+Plot for enjoyment preferences
+
+```{r}
+compare_summary %>% filter(condition=="enjoyable") %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  select(-selected, -appeared, -condition) %>%
+  pivot_wider(values_from = prop_selected, names_from = study_phase) %>%
+  ggplot() +
+  geom_point(aes(x=pretest, y=posttest, color = as.integer(puzzle_id_sorted)),
+             size=2) +
+  coord_equal()+
+  geom_abline(intercept=0, slope=1, color="grey50") +
+  scale_color_gradient(low = "green",high= "red") +
+  labs(title = "Which puzzle is more enjoyable? Selection rates",
+       caption = "colored from lowest mean difficulty rating (green) to highest (red)")
+```
+
+# Comparison - mElo per participant
+
+In this part, we estimate individual participant's subjective puzzle rankings based on their 2AFC judgments to the question of which is more [difficult / enjoyable]? 
+
+- Each participant made 8 AFC judgments during pretest and 8 AFC judgments during posttest. 
+- A different set of 8 puzzles were presented during pretest and posttest. 
+- There were 3 stimuli sets in total (24 puzzles), with presentation order counterbalanced across participants (i.e., AB, BA, AC, CA, BC, CB)
+
+We use the ELO statistic, commonly used to rank items after binary match ups. This is commonly used to rank chess players according to their history of wins and losses. Here, a puzzle with higher ELO score was more often selected in the 2AFC task (i.e., more frequently judged as more difficult / enjoyable). However, because Elo scores are sensitive to the sequence of matches, we will compute a mean Elo score (**mElo**) over 1000 permutations of possible trial sequences. We follow this method from [Clark et al 2018](https://doi.org/10.1371/journal.pone.0190393)
+
+Utility functions
+
+```{r}
+
+```
+
+## Compute mElo per subject
+
+First prepare data in long format:
+
+```{r}
+elo_df <- compare_long %>%
+  select(-c(response, stimuli, viewing_time)) %>%
+  mutate(selected = case_match(selected, 0 ~ "unchosen", 1 ~ "chosen")) %>%
+  pivot_wider(names_from = selected, values_from = puzzle_id)
+
+# elo_df_pre_diff <- filter(elo_df, condition=="difficult", study_phase=="pretest")
+# elo_df_pre_fun <- filter(elo_df, condition=="enjoyment", study_phase=="pretest")
+# elo_df_post_diff <- filter(elo_df, condition=="difficult", study_phase=="posttest")
+# elo_df_post_fun <- filter(elo_df, condition=="enjoyment", study_phase=="posttest")
+
+head(elo_df)
+```
+
+```{r}
+elo_participant_list <- elo_df %>%
+  mutate(grp = paste(gameID, condition, study_phase, sep = "_")) %>%
+  split(.$grp)
+
+nsub = length(elo_participant_list)
+elo_participant_diff_list <- lapply(elo_participant_list[1:nsub], FUN = make_elo_diff)
+
+# add summary stats
+elo_participant_summary_list <- lapply(elo_participant_diff_list, FUN = make_elo_summary)
+# add name
+names(elo_participant_summary_list) <- names(elo_participant_diff_list)
+# add grp to each item
+for (id in 1:nsub) {
+  elo_participant_summary_list[[id]]$grp <- names(elo_participant_summary_list)[id]
+}
+
+# combine
+elo_participant_summary_long <- reduce(elo_participant_summary_list, rbind) %>%
+  separate(grp, c("gameID", "condition", "study_phase"), sep = "_")
+
+# print df column names
+str(elo_participant_summary_long)
+```
+
+### visualize for one participant
+
+The **black circles** represent `mELO` (the average rating at the end of the permutation process) for each stimulus, and the black lines represent their ranges. The **grey circles** show the final ratings from the original sequence (i.e., raw data).
+
+- black = mElo, grey = original ratings
+- error = SD of Elo in `r nRuns_elo_permute` trial order permutations
+
+```{r fig.height=8, fig.width=12}
+somegames <- select(elo_participant_summary_long, gameID, condition) %>%
+  unique() %>%
+  group_by(condition) %>%
+  slice_sample(n=2) %>% ungroup()
+
+elo_participant_summary_long %>%
+  filter(gameID %in% somegames$gameID) %>%
+  mutate(study_phase = factor(study_phase, levels=c('pretest', 'posttest'))) %>%
+  ggplot(aes(x = reorder(puzzle_id, mElo))) +
+  geom_pointrange(aes(y = mElo,
+                      ymin = mElo-sdElo, ymax = mElo+sdElo),
+                  fill="black") +
+  geom_point(aes(y=elo), fill="grey70", shape=25, size=3, alpha = 0.5) +
+  facet_wrap(condition ~ gameID +study_phase, 
+             scales='free', drop = TRUE,
+             ncol=4) +
+  coord_flip()
+```
+
+Ok, first glance - it looks like permutation estimates aren't too far from the first trial order.
+
+## bootstrap puzzle elo by sampling over participants
+
+Now we define **bootElo**: a bootstrapped Elo score for each puzzle, in each condition and study phase,
+by resampling over participants.
+
+1. Make bootElo per puzzle
+
+```{r}
+mElo.df <- elo_participant_summary_long %>%
+  group_by(puzzle_id, condition, study_phase) %>%
+  tidyboot_mean(mElo)
+head(mElo.df)
+```
+
+Now Across puzzles: Pretest correlation between difficulty & fun. 
+First make a wide df just with mElos
+
+```{r}
+mElo.df.wide <- 
+  mElo.df %>% 
+  select(puzzle_id, condition, study_phase, mElo = empirical_stat) %>%
+  ungroup() %>%
+  pivot_wider(names_from = c(condition, study_phase),
+                   values_from = mElo)
+
+head(mElo.df.wide, n=2)
+```
+
+Now bootstrap various correlation reliability scores
+
+```{r}
+bootvars <- c('difficult_pearson', 
+      'enjoyable_pearson',
+      'd_vs_e_pre',
+      'd_vs_e_post',
+      'pre_to_post')
+
+get_bootstrapped_elo_stats <- function(D, d) {
+  E = D[d,]
+  (difficult_pearson <-  cor(E$difficult_pretest, E$difficult_posttest, method='pearson'))
+  (enjoyable_pearson <-  cor(E$enjoyable_pretest, E$enjoyable_posttest, method='pearson'))
+  (d_vs_e_pre <- cor(E$difficult_pretest, E$enjoyable_pretest, method='pearson'))
+  (d_vs_e_post <- cor(E$difficult_posttest, E$enjoyable_posttest, method='pearson'))
+  (pre_to_post <- d_vs_e_post - d_vs_e_pre)
+  
+  return(c(difficult_pearson, enjoyable_pearson, 
+           d_vs_e_pre, d_vs_e_post, pre_to_post))
+}
+
+bootElo.out <- boot(mElo.df.wide, get_bootstrapped_elo_stats, R = nBootIter)
+saveRDS(bootElo.out, here('data/bootElo.Rds'))
+```
+
+Cool! The input to the above summary (i.e., bootstrapped values) are stored under `bootElo$t`.
+Let's look at the first 3 rows. 
+You can see there are 5 columns, one for every estimated coefficient. 
+Each row comes from a bootstrap sample.
+
+```{r}
+bootElo.out$t[1:3,]
+print('Variables are:')
+bootvars
+```
+
+What's the point estimate of the mean?
+
+```{r}
+summary(bootElo.out)
+```
+
+Cool, let's compute 95%CI. 
+
+```{r}
+(bootElo.summary <- 
+  broom::tidy(bootElo.out,conf.int=TRUE,conf.method="perc") %>%
+  mutate(variable = bootvars,
+         boot_statistic = statistic - bias) %>%
+  select(variable, 
+         empirical_statistic = statistic, 
+         boot_statistic,
+         boot_bias = bias, 
+         conf.low,
+         conf.high))
+```
+
+
+#### check mElo vs selection rate
+
+They're closely related!
+
+```{r}
+mElo.df %>% 
+  left_join(compare_summary) %>%
+  left_join(select(testTrials, puzzle_id, puzzle_id_sorted) %>% unique()) %>%
+  ggplot() +
+  geom_point(aes(x=prop_selected, y=empirical_stat,
+                 color = as.integer(puzzle_id_sorted)),
+             size=3, shape=21) +
+  scale_color_gradient(low = "green",high= "red") +
+  facet_wrap(.~condition) +
+  labs(x = "proportion selected",
+       y = "mElo",
+       caption = "colored from lowest mean difficulty rating (green) to highest (red)")
+```
+
+
+# Export 
+
+## puzzles csv
+
+48 rows, one row per puzzle and condition
+
+- ratings ()
+- Comparison selection frequency and proportion
+- mElo scores (for each puzzle + studyphase)
+
+```{r}
+df.puzzles <- rating_summary %>%
+  left_join( mElo.df %>%
+               select(puzzle_id, condition, study_phase,
+                      mElo_meanBoot = mean,
+                      mElo = empirical_stat,
+                      mElo_ciLo = ci_lower,
+                      mElo_ciHi= ci_upper) %>%
+               pivot_wider(names_from = study_phase,
+                           values_from = c(mElo, mElo_meanBoot, mElo_ciLo, mElo_ciHi),
+                           names_glue = "{study_phase}_{.value}")) %>%
+  left_join(
+    pivot_wider(compare_summary,
+                values_from = c(prop_selected, selected, appeared),
+                names_from = study_phase,
+                names_glue = "{study_phase}_{.value}"))
+
+head(df.puzzles,2)
+```
+
+Write to csv
+```{r}
+write_csv(df.puzzles,
+          here(csv_path, str_c(iterationName, "puzzle-summary.csv", sep="_")))
+```
+
+## participants elo csv
+
+For each participant, puzzle, phase, condition
+
+```{r}
+elo_participant_summary_long %>%
+  rename(eloMin = min, eloMax = max) %>%
+  group_by(gameID, study_phase) %>%
+  mutate(mElo_rank = rank(mElo)) %>%
+  ungroup() %>%
+  left_join(df.puzzles %>% select(puzzle_id, stimuli_set) %>% unique()) %>%
+  relocate(gameID, condition, study_phase, stimuli_set, puzzle_id) %>%
+  write_csv(
+          here(csv_path, str_c(iterationName, "participant-mElo-long.csv", sep="_")))
+```
+
+## change in elo csv
+
+```{r}
+
+write_csv(bootElo.summary, here(csv_path, "bootElo_summary.csv"))
+
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```
+
