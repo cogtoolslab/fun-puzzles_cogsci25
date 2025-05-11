@@ -1,0 +1,48 @@
+#fullScreenPrompt {
+  position: absolute;
+  margin: auto;
+  top: 20px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  width: 95%;
+  height: 100%;
+  background-color: #EFCF8F;
+  border: 1px solid #494436;
+  border-radius: 10px;
+}
+
+#fullScreenText {
+  position: absolute;
+  margin: auto;
+  top: -20%;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 50%;
+  height: 15%;
+  font-size: 3vh;
+  text-align: center;
+  line-height: 12vh;
+}
+
+#fullScreenButton {
+  position: absolute;
+  margin: auto;
+  top: 30%;
+  bottom: 0;
+  z-index: 1000;
+  left: 20px;
+  right: 0;
+  width: 40vh;
+  cursor: pointer;
+  height: 7vh;
+  font-size: 3vh;
+  border-radius: 2vh;
+  border: 0.3vh solid grey;
+}
+
+#fullScreenButton:hover {
+  box-shadow: 0 0.5vh 1vh 0 rgba(0, 0, 0, 0.24), 0 0.7vh 1.5vh 0 rgba(0, 0, 0, 0.19);
+}

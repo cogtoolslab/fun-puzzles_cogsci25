@@ -1,0 +1,466 @@
+---
+title: "Comparison analyses"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+# Set up
+
+
+Load packages, etc 
+Load packages, ggplot themes, etc.
+
+```{r setup, include=FALSE, warning=F, message=F}
+rm(list = ls())
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  "tidyverse", "here",
+  "lme4", "tidyboot", "psych", "irr",
+  'boot',
+  "ggpubr", "scales", "ggExtra", "ggrepel",
+  "rstatix", "lmerTest",
+  "broom", "broom.mixed", "sjPlot",
+  "emmeans", "EloChoice"
+)
+options(digits = 5)
+options(scipen=99)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.height = 4,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+Parameters
+
+```{r}
+set.seed(12341)
+
+here::i_am("analysis/study2/03_analyze-comparisons.Rmd")
+source(here("utils/utils.R"))
+
+studyName <- "study2"
+experimentName <- "fun-puzzles-exp1"
+iterationName <- "production2"
+
+plot_path <- here('results', 'plots', studyName)
+csv_path <- here('results', 'csv', studyName)
+data_path <- here('data', studyName)
+```
+Analyzing Experiment `r experimentName` Iteration `iterationName`.
+
+## Import data
+
+Corpus metadata
+
+```{r}
+# import corpus data
+df.glean <- read_csv(here('stimuli', 'study2', 'fun-puzzles-exp1',
+                       str_c(iterationName, '_puzzles-test.csv'))) %>%
+  mutate(puzzle_shortid = str_c(str_sub(collection_name, 1, 7), level_name, sep=" ")) %>%
+  select(stimuli_set,puzzle_shortid, puzzle_id, layout, enjoyment_cat, difficulty_cat, shortestPath_cat) %>%
+  left_join(select(read_csv(here('results', 'csv', 'study1','full_sokobanonline_df_FINAL.csv')),
+                    -`...1`), 
+            by=c("layout")) %>%
+  rename(astar_solution = optimal_solution,
+         astar_solution_length = optimal_solution_length,
+         astar_solution_string = optimal_solution_string,
+         astar_tedium = tedium)
+# preview
+head(df.glean, 3)
+```
+
+We have stats for each included participant on the comparison task. Merge with gleaned puzzle metadata.
+
+```{r}
+df.trials <- read_csv(here(csv_path,
+                         str_c(iterationName, '_participant-mElo-long.csv'))) %>%
+  rename('puzzle_shortid' = puzzle_id) %>%
+  left_join(df.glean, by=c('puzzle_shortid', 'stimuli_set'))
+head(df.trials)
+```
+
+We also have bootstrapped aggregate Elo for each puzzle. 
+
+```{r}
+# df.bootElo <- readRDS(here(data_path, 'bootElo.Rds'))
+df.puzzles <- read_csv(here(csv_path,
+                         str_c(iterationName, '_puzzle-summary.csv'))) %>%
+  rename('puzzle_shortid' = puzzle_id) %>%
+  left_join(df.glean, by=c('puzzle_shortid', 'stimuli_set'))
+head(df.puzzles)
+```
+
+
+# 2x2x2 impact
+
+- enjoyment_cat
+- difficulty_cat
+- shortestPath_cat
+
+First test for each condition and phase separately:
+
+```{r}
+lm_222_function <- function(df, reml=FALSE) {
+  lmer(y ~ enjoyment_cat * difficulty_cat * shortestPath_cat + (1|puzzle_id) + (1|gameID), 
+       data=df,
+       REML=reml)
+}
+
+trials.222.nest <- df.trials %>%
+  select(gameID:puzzle_id, y=mElo, enjoyment_cat:shortestPath_cat) %>%
+  group_by(condition, study_phase) %>%
+  nest() %>%
+  mutate(model = map(data, lm_222_function))
+
+(trials.222.nest %>%
+  mutate(tidymodel = map(model, tidy)) %>%
+  select(-data, -model) %>%
+  unnest())
+  
+(trials.222.nest %>%
+  mutate(glance = map(model, lme_summary)) %>%
+  select(-data, -model) %>%
+  unnest())
+
+for (idx in 1:4) {
+  print(anova(trials.222.nest$model[[idx]]))
+}
+# (trials.222.nest %>%
+#   mutate(anova = map(model, anova)) %>%
+#   select(-data, -model) %>%
+#   unnest())
+```
+
+
+# Single predictors
+
+1. Visual - number of floor tiles
+2. Visual - proportion of floor tiles = (floor - box) / (floor + wall)
+3. Solution - astar_solution_length
+4. Solution - astar_iters
+5. Online - solution_length
+6. Online - completion rates
+7. Online - like rates
+
+## Pearson's R
+
+Difficulty
+
+```{r}
+agg.difficulty.nest <- df.puzzles %>%
+  filter(condition=="difficult") %>%
+  select(puzzle_id, pretest_mElo, posttest_mElo,
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters, 
+         shortest_solution, completion_rate, like_rate, exp_rating=rating_mean
+         ) %>%
+  pivot_longer(pretest_mElo:posttest_mElo,
+               names_to="study_phase",
+               values_to="mElo") %>%
+  pivot_longer(numFloor:exp_rating,
+               names_to = "predictor",
+               values_to = "value") %>%
+  group_by(study_phase, predictor) %>%
+  nest()
+
+agg.difficulty.nest <- mutate(agg.difficulty.nest, 
+                              model = map(data, cor_function, y='mElo', x='value'))
+
+(corr_difficulty <- select(agg.difficulty.nest, -data) |> unnest())
+```
+
+Enjoyment
+
+```{r}
+agg.fun.nest <- df.puzzles %>%
+  filter(condition=="enjoyable") %>%
+  select(puzzle_id, pretest_mElo, posttest_mElo,
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters, 
+         shortest_solution, completion_rate, like_rate, exp_rating=rating_mean
+         ) %>%
+  pivot_longer(pretest_mElo:posttest_mElo,
+               names_to="study_phase",
+               values_to="mElo") %>%
+  pivot_longer(numFloor:exp_rating,
+               names_to = "predictor",
+               values_to = "value") %>%
+  group_by(study_phase, predictor) %>%
+  nest()
+
+agg.fun.nest <- mutate(agg.fun.nest, 
+                              model = map(data, cor_function, y='mElo', x='value'))
+
+(corr_fun <- select(agg.fun.nest, -data) |> unnest())
+```
+
+## LME
+
+`mElo ~ 1 + feature + (1|participantID) + (1|puzzle ID)` 
+
+<!-- Aggregate:  -->
+<!-- - Pretest `bootElo ~ 1 + feature + (1|puzzleID)`  -->
+<!-- - Posttest `bootElo ~ 1 + feature + (1|puzzleID)` -->
+
+Difficulty
+
+```{r}
+trial.difficulty.nest <- df.trials %>%
+  filter(condition=="difficult") %>%
+  mutate(puzzle_id = as.factor(puzzle_id)) %>%
+  select(puzzle_id, gameID, y=mElo, study_phase,
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters, 
+         shortest_solution, completion_rate, like_rate
+         ) %>%
+  pivot_longer(numFloor:like_rate,
+               names_to = "predictor",
+               values_to = "x") %>%
+  group_by(study_phase, predictor) %>%
+  nest()
+# preview
+# head(trial.difficulty.nest$data[[1]])
+
+trial.difficulty.nest <- mutate(trial.difficulty.nest, 
+                              model = map(data, lme_1_function))
+
+(lme_difficulty.tidy <- trial.difficulty.nest %>%
+  mutate(tidymodel = map(model, tidy)) %>%
+  select(-data, -model) %>%
+  unnest())
+
+```
+```{r message=FALSE, warning=FALSE}
+(lme_difficulty.glance <- trial.difficulty.nest %>%
+  mutate(tidymodel = map(model, lme_summary)) %>%
+  select(-data, -model) %>%
+  unnest())
+```
+
+Enjoyment
+
+```{r}
+trial.fun.nest <- df.trials %>%
+  filter(condition=="enjoyable") %>%
+  select(puzzle_id, gameID, y=mElo, study_phase,
+         numFloor = num_valid_tiles, propFloor,
+         astar_solution_length, astar_iters, 
+         shortest_solution, completion_rate, like_rate
+         ) %>%
+  pivot_longer(numFloor:like_rate,
+               names_to = "predictor",
+               values_to = "x") %>%
+  group_by(study_phase, predictor) %>%
+  nest()
+# preview
+# head(trial.difficulty.nest$data[[1]])
+
+trial.fun.nest <- mutate(trial.fun.nest, 
+                              model = map(data, lme_1_function))
+
+(lme_fun.tidy <- trial.fun.nest %>%
+  mutate(tidymodel = map(model, tidy)) %>%
+  select(-data, -model) %>%
+  unnest())
+
+(lme_fum.glance <- trial.fun.nest %>%
+  mutate(tidymodel = map(model, lme_summary)) %>%
+  select(-data, -model) %>%
+  unnest())
+```
+
+# What is the impact of puzzle-solving experience on how participants compare puzzles?
+
+If experience solving puzzles drives the way participants initially reason about puzzles, then:
+   a. post-test comparisons should demonstrate greater inter-rater reliability than pre-play comparisons;
+   b. post-test comparisons should be more similar to corpus ratings than to pre-play comparisons.
+   c. Puzzle rankings (i.e. relative ratings from puzzle-solving task) should be more similar to rankings computed from post-play comparisons than pre-play comparisons.
+   d. Puzzle rankings will shift systematically from pre- to post-play judgment (e.g., puzzle difficulty and enjoyment might be systematically under-estimated or over-estimated)
+
+`bootElo ~ 1 + study_phase + (1|subjectID) + (1|puzzleID)`
+
+Summary table of bootstrapped quantities
+
+```{r}
+(bootElo.summary <- read_csv(here(csv_path, "bootElo_summary.csv")))
+```
+
+Did mElo scores shift systematically?
+
+compare pre to post test, difficult
+
+```{r fig.height=3, fig.width=7}
+elos <- read_csv(here(csv_path, 'production2_participant-mElo-long.csv'))
+elos %>%
+  filter(condition == "difficult") %>%
+  select(gameID, puzzle_id, study_phase, mElo) %>%
+  group_by(study_phase, puzzle_id) %>%
+  summarise(mean_elo = mean(mElo), sd_elo = sd(mElo)) %>%
+  ungroup() %>%
+  mutate(grp = study_phase) %>%
+  select(-study_phase) %>%
+  # left_join(df.trials$gameID, by=c('gameID'='gameID')) %>%
+  # left_join(df.trials$gameID, by=c('gameID'='gameID')) %>%
+# bind_rows(df.trials$gameID, elo_summary_list[[2]]) %>%
+  ggplot(aes(x = reorder(puzzle_id, mean_elo), fill = grp, color = grp)) +
+  geom_errorbar(aes(ymin = mean_elo-sd_elo, ymax = mean_elo+sd_elo),
+                # aes(ymin = min, ymax = max),
+                width = 0, position = position_dodge(width = 0.4)) +
+  geom_point(aes(y = mean_elo), shape = 21, size = 3, position = position_dodge(width = 0.4)) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(subtitle="Difficulty")
+```
+
+compare pre to post test, fun
+```{r fig.height=3, fig.width=7}
+elos %>%
+  filter(condition == "enjoyable") %>%
+  select(gameID, puzzle_id, study_phase, mElo) %>%
+  group_by(study_phase, puzzle_id) %>%
+  summarise(mean_elo = mean(mElo), sd_elo = sd(mElo)) %>%
+  ungroup() %>%
+  mutate(grp = study_phase) %>%
+  select(-study_phase) %>%
+  # left_join(df.trials$gameID, by=c('gameID'='gameID')) %>%
+  # left_join(df.trials$gameID, by=c('gameID'='gameID')) %>%
+# bind_rows(df.trials$gameID, elo_summary_list[[2]]) %>%
+  ggplot(aes(x = reorder(puzzle_id, mean_elo), fill = grp, color = grp)) +
+  geom_errorbar(aes(ymin = mean_elo-sd_elo, ymax = mean_elo+sd_elo),
+                # aes(ymin = min, ymax = max),
+                width = 0, position = position_dodge(width = 0.4)) +
+  geom_point(aes(y = mean_elo), shape = 21, size = 3, position = position_dodge(width = 0.4)) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(subtitle="Enjoyable")
+```
+
+
+### Relationship of anticipated fun & difficulty
+
+#### Figure 6
+
+```{r fig.height=3.5, fig.width=5}
+
+df.puzzles %>%
+  select(stimuli_set:condition, pretest_mElo_meanBoot, posttest_mElo_meanBoot,
+         # pretest_prop_selected,posttest_prop_selected
+         ) %>%
+  pivot_longer(cols = c(pretest_mElo_meanBoot, posttest_mElo_meanBoot),
+               names_to = c('study_phase', 'measure'),
+               values_to = 'value',
+               names_sep=c('_')) %>%
+  pivot_wider(names_from = condition,
+              values_from = value) %>%
+  mutate(study_phase = factor(study_phase, levels=c('pretest', 'posttest'))) %>%
+  ggplot(aes(x = difficult, y = enjoyable, color=study_phase, fill=study_phase)) +
+  # geom_errorbar(aes(ymin = posttest_mElo_ciLo, ymax = posttest_mElo_ciHi), alpha = 0.7) +
+  # geom_errorbarh(aes(xmin = pretest_mElo_ciLo, xmax = pretest_mElo_ciHi), alpha = 0.7) +
+  geom_point(size = 2, shape = 21, aes(fill = study_phase)) +
+    facet_wrap(. ~ study_phase) +
+  geom_abline(intercept = 0,slope=1, linetype="dashed", size=0.5,
+              aes(color = study_phase, fill=study_phase)) +
+  geom_smooth(method="lm", alpha=0.1) +
+  scale_x_continuous(breaks=c(-15,0,15))+
+  scale_y_continuous(breaks=c(-30,-15,0,15, 30))+
+  # coord_equal() +
+  labs(
+    x= "Difficulty ELO",
+    y= "Enjoyment ELO",
+    caption = "Each point represents a puzzle\nError bars show 95% CI"
+  ) +
+  guides(color='none', fill='none') +
+  theme(base_size=20)
+
+ggsave(here(plot_path, str_c(experimentName, "_ELO-change.pdf")),
+            dpi=300,
+       width=4.8, height=3.5)
+
+```
+
+
+
+
+# 4b. Impact on inter-rater agreement
+
+**Hypothesis**: post-test comparisons should demonstrate greater inter-rater reliability than pre-play comparisons.
+
+## splithalf reliability of mElo, across phases
+
+Resampling 1000 splithalves.
+
+```{r}
+splitIters = 10000
+trials.nested <- df.trials %>% 
+  select(condition, stimuli_set, study_phase, puzzle_id, gameID, mElo) %>%
+  group_by(stimuli_set, condition, study_phase) %>%
+  nest() %>%
+  mutate(data = map(data, ~ .x %>%
+    pivot_wider(
+      names_from = puzzle_id,
+      values_from = mElo) %>%
+   select(-gameID)))
+
+get_shr_stats <- function(D, raw=T) {
+  shr <- psych::splitHalf(D, raw=raw,
+                        brute=F, n.sample=splitIters)
+  tibble(shr_mean = shr$meanr,
+       shr_ciLo = shr$ci[[1]],
+       shr_ciHi = shr$ci[[3]])
+}
+# testing
+# get_shr_stats(trials.nested$data[[1]])
+
+# run it for all conditions and stimuli sets
+(trials.summary <- trials.nested %>%
+  mutate(shr = map(data, get_shr_stats)) %>%
+  select(-data) %>%
+  unnest() %>%
+    arrange(
+      stimuli_set, condition, study_phase
+    )
+)
+```
+
+Overall, between-participant consistency of mElo scores low; mean SHR = `r mean(trials.summary$shr_mean)` with no difference across study phase, condition, or stimuli set.
+
+```{r}
+trials.summary %>%
+  ggplot(aes(y = shr_mean, color = study_phase, x=condition, shape=stimuli_set)) +
+  geom_pointrange(aes(ymin = shr_ciLo, ymax = shr_ciHi),
+                  position = position_dodge(width=0.2)) +
+  facet_wrap(.~stimuli_set)
+```
+
+# 4c. Impact on similarity to corpus
+
+- `DV` = similarity of mElo distribution to corpus distribution, `manipulation` = pre or post-play
+- Hypothesis: post-test comparisons should be more similar to corpus ratings than to pre-play comparisons.
+
+# 4d. Impact on similarity to test phase puzzle ratings
+
+Correlation beween ratings, pretest, posttest
+
+```{r}
+(corr_phases <- df.puzzles %>%
+  select(condition, puzzle_id, rating_mean, 
+         rating_mean, pretest_mElo, posttest_mElo
+         ) %>%
+  group_by(condition) %>%
+  nest() %>%
+  mutate(pearson_pre.main = map(data, cor_function, x='rating_mean', y='pretest_mElo'),
+         pearson_post.main= map(data, cor_function, x='rating_mean', y='posttest_mElo'),
+         pearson_pre.post = map(data, cor_function, x='pretest_mElo', y='posttest_mElo'),
+         spearman_pre.main = map(data, cor_function, x='rating_mean', y='pretest_mElo', r_method='spearman'),
+         spearman_post.main= map(data, cor_function, x='rating_mean', y='posttest_mElo', r_method='spearman'),
+         spearman_pre.post = map(data, cor_function, x='pretest_mElo', y='posttest_mElo', r_method='spearman')) %>%
+  select(-data) %>%
+  pivot_longer(cols = pearson_pre.main:spearman_pre.post,
+               names_to = c("method", "contrast"),
+               names_sep="_") %>%
+  unnest())
+```
+
+- `DV` = similarity of mElo distribution to puzzle ratings from puzzle-solving task
+- Hypothesis: Puzzle rankings (i.e. relative ratings from puzzle-solving task) should be more similar to rankings computed from post-play comparisons than pre-play comparisons.
