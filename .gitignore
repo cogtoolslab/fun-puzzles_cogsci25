@@ -1,5 +1,6 @@
 ## exceptions
 !package.json
+!stimuli/*.png
 !stimuli/*.gif
 !stimuli/*.mp4
 !stimuli/*.png
