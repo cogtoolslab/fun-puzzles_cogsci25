@@ -53,7 +53,9 @@ We ran an experiment to see what makes people think a puzzle is fun to solve. St
 
 #### Window shopping task
 
-<video controls width="100%"><source src="stimuli/exp_compare_demo.mp4" type="video/mp4"></video>
+<p align="center" style="font-size: smaller">
+  <img width="100%" src="stimuli/exp_compare_demo.gif"></img>
+</p>
 
 Participants saw pairs of puzzles and judged which seemed more enjoyable/difficult. Participants completed 8 comparison trials, seeing each puzzle twice (with a different competitor). Participants could not interact with the puzzle.
 
