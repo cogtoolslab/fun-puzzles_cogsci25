@@ -1,0 +1,30 @@
+{
+  "name": "fun-puzzles-pilot",
+  "version": "0.0.1",
+  "description": "This package contains dependencies for the fun-puzzles project",
+  "main": "app.js",
+  "dependencies": {
+    "body-parser": "^1.17.2",
+    "color-convert": "~1.0.0",
+    "colors": "^1.1.2",
+    "express": "^4.21.2",
+    "jsonfile": "~2.4.0",
+    "lodash": "^4.17.21",
+    "minimist": "^1.2.8",
+    "mongodb": "^2.2.28",
+    "npm": "^10.9.2",
+    "request": "^2.88.2",
+    "socket.io": "^4.8.1",
+    "underscore": "^1.13.7",
+    "uuid": "11.0.3",
+    "xmldom": "^0.6.0",
+    "xmlhttprequest": "^1.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Junyi Chu",
+  "license": "N/A",
+  "homepage": "https://github.com/cogtoolslab/fun-puzzles#readme"
+}
