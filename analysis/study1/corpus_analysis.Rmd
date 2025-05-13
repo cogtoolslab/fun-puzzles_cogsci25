@@ -28,7 +28,7 @@ set.seed(12341)
 ## Import data
 
 ```{r}
-# puzzles_metadata.csv
+# puzzles metadata
 sokobanonline_data = read_csv(here('data','study1', 'full_sokobanonline_df.csv')) |>
   select(-`...1`)
 ```
@@ -86,9 +86,6 @@ model <- lm(like_rate ~ propFloor, data = sokobanonline_data)
 cooksD <- cooks.distance(model)
 influential <- cooksD[(cooksD > (3 * mean(cooksD, na.rm = TRUE)))]
 names_of_influential <- names(influential)
-
-# subset(sokobanonline_data, row.names(sokobanonline_data) %in% names_of_influential) |>
-#   pull(id)
 ```
 
 

@@ -1,5 +1,5 @@
 import numpy as np
-from sokoban_solvers import EnhancedAStarAgent, State
+from utils.sokoban_solvers import EnhancedAStarAgent, State
 
 def count_boxes(layout_string):
     return layout_string.count("$") + layout_string.count("*")
@@ -41,16 +41,12 @@ def count_tiles_inside_walls(sokoban_map):
                 grid[x][y] = '|'  # Mark as visited
                 for dx, dy in directions:
                     stack.append((x + dx, y + dy))
-        # print("grid:", grid)
-        # joined_l = list(''.join(g) for g in grid)
-        # print('\n'.join(joined_l))
         return count
 
     # Locate the starting position of '@'
     start_x, start_y = None, None
     for r in range(rows):
         for c in range(cols):
-            #print(f"{(r,c)}:", grid[r][c])
             if grid[r][c] in ['@', '+']:
                 start_x, start_y = r, c
                 break

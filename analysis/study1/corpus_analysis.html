@@ -10,7 +10,7 @@
 
 
 
-<meta name="date" content="2025-05-09" />
+<meta name="date" content="2025-05-13" />
 
 <title>Fun Puzzles Study 1 Modeling</title>
 
@@ -2774,7 +2774,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">Fun Puzzles Study 1 Modeling</h1>
-<h4 class="date">2025-05-09</h4>
+<h4 class="date">2025-05-13</h4>
 
 </div>
 
@@ -2785,7 +2785,7 @@ border-radius: 0px;
 </div>
 <div id="import-data" class="section level2">
 <h2>Import data</h2>
-<pre class="r"><code># puzzles_metadata.csv
+<pre class="r"><code># puzzles metadata
 sokobanonline_data = read_csv(here(&#39;data&#39;,&#39;study1&#39;, &#39;full_sokobanonline_df.csv&#39;)) |&gt;
   select(-`...1`)</code></pre>
 <pre><code>## New names:
@@ -2899,10 +2899,7 @@ print(summary_stats)</code></pre>
 <pre class="r"><code>model &lt;- lm(like_rate ~ propFloor, data = sokobanonline_data)
 cooksD &lt;- cooks.distance(model)
 influential &lt;- cooksD[(cooksD &gt; (3 * mean(cooksD, na.rm = TRUE)))]
-names_of_influential &lt;- names(influential)
-
-# subset(sokobanonline_data, row.names(sokobanonline_data) %in% names_of_influential) |&gt;
-#   pull(id)</code></pre>
+names_of_influential &lt;- names(influential)</code></pre>
 </div>
 <div id="b-correlations-removing-high-leverage-points" class="section level3">
 <h3>B) correlations (removing high leverage points)</h3>
