@@ -1,9 +1,11 @@
 ## exceptions
 !package.json
-!stimuli/*.png
 !stimuli/*.gif
 !stimuli/*.mp4
 !stimuli/*.png
+!results/*.csv
+!results/*.pdf
+
 ## ignoring by default
 .DS_Store
 .ipynb_checkpoints/

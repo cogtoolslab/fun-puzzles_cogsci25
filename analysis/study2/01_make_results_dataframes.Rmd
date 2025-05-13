@@ -28,9 +28,6 @@ pacman::p_load(
 here::i_am("analysis/study2/01_make_results_dataframes.Rmd")
 
 source(here("utils/utils.R"))
-
-csv_path <- here("results", "csv", "study2")
-
 options(digits = 5)
 set.seed(12341)
 knitr::opts_chunk$set(
@@ -45,7 +42,16 @@ knitr::opts_chunk$set(
 ### Study Parameters
 
 ```{r}
+studyName <- "study2"
+experimentName <- "fun-puzzles-exp1"
 iterationName <- "production2"
+
+plot_path <- here('results', 'plots', studyName)
+csv_path <- here('results', 'csv', studyName)
+stimuli_path <- here('stimuli', studyName, experimentName)
+data_path <- here('data', studyName)
+
+
 nRuns_elo_permute = 1000
 nBootIter = 1000
 splitIters = 10000
@@ -56,7 +62,7 @@ This is iteration *`r iterationName`*.
 ### Stimuli metadata
 
 ```{r}
-stimuli <- read_csv(here("stimuli", "study2", "fun-puzzles-exp1", paste0(iterationName, "_puzzles-test.csv")))
+stimuli <- read_csv(here(stimuli_path, paste0(iterationName, "_puzzles-test.csv")))
 stimuli %>% head()
 ```
 
@@ -65,7 +71,7 @@ We imported metadata about `r nrow(stimuli)` puzzles.
 ### Tabulate exclusion reasons
 
 ```{r}
-exclusions <- read_csv(here("data", "study2", paste(iterationName, "exclusions.csv", sep = "_")))
+exclusions <- read_csv(here(data_path, paste(iterationName, "exclusions.csv", sep = "_")))
 ```
 
 There are `r length(unique(exclusions$gameID))` sessions excluded, see reasons below. 
@@ -83,7 +89,7 @@ exclusions %>% count(reasons)
 Import exit survey
 
 ```{r}
-survey <- read_csv(here("data", "study2", paste(iterationName, "survey.csv", sep = "_"))) %>%
+survey <- read_csv(here(data_path, paste(iterationName, "survey.csv", sep = "_"))) %>%
   mutate(
     judgedDifficulty = factor(judgedDifficulty, levels = c(1, 2, 3, 4, 5), labels = c("1\nVery Easy", "2", "3", "4", "5\nVery Hard")),
     participantEffort = factor(participantEffort, levels = c(1, 2, 3, 4, 5), labels = c("1\nVery Low", "2", "3", "4", "5\nVery High")),
@@ -100,7 +106,7 @@ head(survey)
 We have 8 test trials. Compute some summary statistics:
 
 ```{r}
-testTrials <- read_csv(here("data", "study2", paste(iterationName, "testTrials.csv", sep = "_"))) %>%
+testTrials <- read_csv(here(data_path, paste(iterationName, "testTrials.csv", sep = "_"))) %>%
   filter(!gameID %in% exclusions$gameID) %>%
   mutate(puzzle_id = paste(str_sub(collection_name, 1, 7), level_name)) %>%
   rename(rating = rate_response,
@@ -137,7 +143,7 @@ head(rating_summary)
 
 And 16 comparison trials (8 pretest 8 posttest)
 ```{r}
-compareTrials <- read_csv(here("data", "study2", paste(iterationName, "compareTrials.csv", sep = "_"))) %>%
+compareTrials <- read_csv(here(data_path, paste(iterationName, "compareTrials.csv", sep = "_"))) %>%
   filter(!gameID %in% exclusions$gameID) %>%
   select(gameID:level_name_1) %>%
   mutate(
@@ -297,7 +303,7 @@ ggplot(testTrials, aes(y = rating, x = puzzle_id_sorted, fill = condition)) +
   scale_color_manual(values = CONDITION_COLORS)+
   guides(fill = "none", color="none") +
   theme(axis.text.x = element_text(size = 6, angle = 90))
-ggsave(here('results','plots','puzzle-ratings.pdf'), width = 8, height = 4, dpi=300)
+ggsave(here(plot_path, 'puzzle-ratings.pdf', sep="_"), width = 8, height = 4, dpi=300)
 ```
 
 ## Split half reliability per condition
@@ -475,7 +481,7 @@ ggpaired(compare_summary,
   guides(color = "none") +
   labs(x = "Study Phase", y = "% selected") +
   scale_color_manual(values = CONDITION_COLORS)
-ggsave(here('results', 'plots',"compare_summary.pdf"), width = 6, height = 3, dpi=300)
+ggsave(here(plot_path, "compare_summary.pdf"), width = 6, height = 3, dpi=300)
 ```
 
 Above diagonal = rating increased.
@@ -652,7 +658,7 @@ get_bootstrapped_elo_stats <- function(D, d) {
 }
 
 bootElo.out <- boot(mElo.df.wide, get_bootstrapped_elo_stats, R = nBootIter)
-saveRDS(bootElo.out, here('data/bootElo.Rds'))
+saveRDS(bootElo.out, here('results', iterationName, 'bootElo.Rds', sep="_"))
 ```
 
 Cool! The input to the above summary (i.e., bootstrapped values) are stored under `bootElo$t`.

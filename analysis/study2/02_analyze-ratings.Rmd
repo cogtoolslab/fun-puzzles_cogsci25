@@ -49,7 +49,7 @@ here::i_am("analysis/study2/02_analyze-ratings.Rmd")
 source(here("utils/utils.R"))
 
 studyName <- "study2"
-experimentName <- "fun-puzzles-exp1"
+#experimentName <- "fun-puzzles-exp1"
 iterationName <- "production2"
 
 plot_path <- here('results', 'plots', studyName)
@@ -214,7 +214,7 @@ puzzles_wide %>%
   #   caption = "Each point represents a puzzle\nError bars show 95% CI"
   # )
 
-ggsave(here(plot_path, str_c(experimentName, "_ratings-scatter.pdf")),
+ggsave(here(plot_path, "ratings-scatter.pdf"),
             dpi=300,
        width=3, height=3)
 
@@ -638,7 +638,7 @@ ggplot(dat, aes(x=x, y=predicted)) +
   labs(x = "Steps taken", y = "Rated enjoyment") +
   theme(legend.position = "none")
 
-ggsave(here(plot_path, str_c(experimentName, "_interaction.pdf")),
+ggsave(here(plot_path, "_interaction.pdf"),
             dpi=300,
        width=3, height=3)
 

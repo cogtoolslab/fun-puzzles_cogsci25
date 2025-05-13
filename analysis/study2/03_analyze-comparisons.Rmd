@@ -85,7 +85,7 @@ head(df.trials)
 We also have bootstrapped aggregate Elo for each puzzle. 
 
 ```{r}
-# df.bootElo <- readRDS(here(data_path, 'bootElo.Rds'))
+# df.bootElo <- readRDS(here(results, str_c(iterationName, 'bootElo.Rds', sep="_")))
 df.puzzles <- read_csv(here(csv_path,
                          str_c(iterationName, '_puzzle-summary.csv'))) %>%
   rename('puzzle_shortid' = puzzle_id) %>%
@@ -293,7 +293,7 @@ Did mElo scores shift systematically?
 compare pre to post test, difficult
 
 ```{r fig.height=3, fig.width=7}
-elos <- read_csv(here(csv_path, 'production2_participant-mElo-long.csv'))
+elos <- read_csv(here(csv_path, str_c('production2', 'participant-mElo-long.csv', sep="_")))
 elos %>%
   filter(condition == "difficult") %>%
   select(gameID, puzzle_id, study_phase, mElo) %>%
@@ -373,7 +373,7 @@ df.puzzles %>%
   guides(color='none', fill='none') +
   theme(base_size=20)
 
-ggsave(here(plot_path, str_c(experimentName, "_ELO-change.pdf")),
+ggsave(here(plot_path, "_ELO-change.pdf"),
             dpi=300,
        width=4.8, height=3.5)
 
