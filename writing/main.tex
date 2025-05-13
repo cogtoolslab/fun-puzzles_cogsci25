@@ -134,7 +134,6 @@ Together, these studies advance understanding of how both features of the task e
 \end{abstract}
 
 \section{Introduction}
-% 1 - OPENING - some games are more fun than others
 In 2022, the \textit{New York Times} -- one of the oldest newspapers in the United States -- paid \$1 million USD to acquire \textit{Wordle}, a puzzle game where players guess a 5-letter word. 
 \textit{Wordle} continues to be one of the most popular games in the \textit{Times} app. 
 Yet a similar guessing game, \textit{Digits}, was taken down after just 4 months \cite{Amlen.2023}.   
@@ -188,15 +187,6 @@ Thus, Sokoban offers a simple but expressive domain to explore variability puzzl
 We have two goals. The first is to understand how differences between puzzle levels impact puzzle enjoyment. We examined this relationship in both an online corpus of 442 puzzles (Study 1), as well as a lab experiment (Study 2). Our second goal is to explore the degree to which participants can anticipate which puzzles will be more fun \textit{before} attempting it, and explore how these rapid appraisals might be impacted by puzzle-solving practice using a pre-/post-test design. An overview of our approach is outlined in Fig \ref{fig:methods}. Our experiment and analysis code can be accessed at 
 \url{https://github.com/cogtoolslab/fun-puzzles_cogsci25}
 
-
-% In Study 1, we introduce visual and solution-based metrics puzzle complexity, and examine how these features predict which puzzles receive the most "likes" in an online dataset of 460 puzzles. In Study 2, we develop an experimental paradigm to measure participants' self-reported enjoyment immediately after attempting a puzzle. We also collected participants' puzzle-solving traces in order to assess the relative contribution of puzzle complexity, difficulty, and behavioral dynamics in predicting enjoyment ratings. We also measured participants' predictions about which puzzles will be more enjoyable from brief exposures, and analyzed how these rapid appraisals are impacted by puzzle-solving practice.
-
-% Puzzle-solving performance can be evaluated in terms of both goal achievement (e.g., how many boxes are placed on goal tiles) and efficiency (e.g., the amount of time or steps taken). Critically, boxes can only be pushed, not pulled, so it is possible for a box to be “stuck” in corners. Learning to avoid these irreversible positions can greatly reduce planning complexity and improve the chances and speed of success.
-% Thus, Sokoban is a useful domain to study how participants might go beyond perceptual heuristics to evaluate puzzles, and also to assess how puzzle-solving experience might drive changes in puzzle evaluation.
-% 
-
-%  Previous research has found that people reliably judge how fun simple two-player games will be, and that such judgments are partly explained by a model that simulates a few potential game plays (Zhang et al 2024 cogsci). We build on this work by asking how such judgments may change with domain-specific practice. Research on expertise suggests that domain knowledge, experience, and skill impact how people reason about tasks, but past work has mostly focused on problem categorization and difficulty judgments. We take a first step towards examining the role of experience in affective appraisals.
-
 \section{Study 1: Characterizing relationship between puzzle features and enjoyment in the wild}
 We first sought to understand which aspects of a puzzle layout predict enjoyment in real-world human data. To do so, we use publicly available puzzle metadata from an online game website where people create, play, and vote on puzzles \cite{sokobanonline}. For each puzzle in the dataset, we calculated measures of visual complexity, solution complexity, and enjoyment. 
 
@@ -205,7 +195,6 @@ We first sought to understand which aspects of a puzzle layout predict enjoyment
 \begin{figure*}[ht]
     \centering
     \includegraphics[width=0.8\textwidth]{figures/fig3.pdf}
-    % \includegraphics[width=0.8\textwidth]{gleaning_figs/glean-combined_plot_illustrator.pdf}
     \caption{Predictors of puzzle like rate in an online corpus of 460 puzzles. \textbf{(A)} Visual features (blue) were computed from the puzzle layout and include \texttt{puzzle area} (the number of floor tiles), \texttt{openness} (($n_{floor} - n_{boxes}) / (n_{floor} + n_{walls})$), and the \texttt{number of boxes} that must be correctedly placed. 
     Solution-based features (green) show the results of using the A* search algorithm to solve each puzzle. \texttt{Steps per box} reflects length of best solution divided by number of boxes; \texttt{search difficulty} reflects number of model iterations before a solution was achieved (max one million). Bars show Pearson correlations; asterisks indicate significant values at $p < 0.05$. \textbf{(B)} Relationship between puzzle completion rate and like rate, computed over all attempts. Best-fit line shows predictions of quadratic model with 95\% CI.}
     \label{fig:gleaning-figure}
@@ -218,11 +207,7 @@ We first sought to understand which aspects of a puzzle layout predict enjoyment
 We obtained puzzles from the ``Web Archive" list available in December 2024, as these all follow classic Sokoban rules without custom extensions (e.g., portals, magnets). 
 A total of 115,885 puzzles were available, but we focus our analysis on puzzles with at least 200 attempts (n = 680). % \kz{and some select additional 16 puzzles with at least 100 plays and three boxes (overall n = 696)}. 
 We next excluded 254 puzzles that could not be solved by the A* search algorithm within 1 million iterations
-%; 66 of these had all boxes already on goal states.
 Finally, we included 16 additional puzzles with at least 100 attempts from popular collections designed for novices, which we also use in Study 2.
-%We next excluded another 66 puzzles where all boxes were initially on goal states, and another 159 puzzles that could not be solved by the A* search algorithm within 1 million iterations.
-%, as we could not obtain algorithmic model-based measures of puzzle difficulty. 
-% 159 puzzles were additionally excluded as they were too complex to be solved by an A* search algorithm within 1 million iterations. 
 The final dataset comprised 442 puzzles from 26 different authors, with a total of 4031 like or dislike votes. % 3929 likes, 4031 total reactions
 
 \subsubsection{Visual measures}
@@ -239,7 +224,6 @@ We also defined puzzle \textit{completion rate} as the proportion of successful 
 \subsubsection{Enjoyment measures}
 Players can vote on each puzzle with a like or dislike, which we transform into an enjoyment measure by dividing total likes by the number of attempts to obtain a \textit{like rate} ($M =2.26\%$, $SD = 0.96\%$, $range =[0.30\%, 6.01\%]$).
 When people react to a puzzle, they typically give likes ($M=98\%$, $SD=4.4\%$, $range = [67\%, 100\%]$); only 30 puzzles have a like ratio below 90\%. 
-% While interesting, we leave analyses of what makes certain puzzles polarizing for future work.
 
 \subsection{Results}
 
@@ -247,8 +231,6 @@ We first examined the association between like rate and each computed puzzle fea
 A lower like rate was observed for larger puzzles ($\rho(438) =-0.11$, $p=.01$) and puzzles with more boxes ($\rho(433) = -0.33$, $p<.0001$), though enjoyment was not related to the proportion of empty tiles (openness: $\rho(414) = 0.88$, $p=.01$). 
 Puzzles that A* could solve in fewer iterations also had a higher like rate ($\rho(413) = 0.11$, $p=.02$), suggesting an overall preference for simpler puzzles. 
 Like rate was also higher for puzzles requiring more steps per box ($\rho(414) = 0.26$, $p<0.0001$). 
-
-% A higher like rate was observed for smaller puzzles ($\rho = 0.097$, $t(440)=2.03$, $p=.043$) and puzzles with fewer boxes ($\rho = -0.21$, $t(440)=-4.53$, $p<.0001$), though it was not related to the proportion of empty tiles ($\rho = -0.055$, $t(440)=-1.15$, $p=.25$).  Puzzles that A* could solve in fewer iterations also had a higher like rate ($\rho = -0.093$, $t(440)=-1.96$, $p=.051$) \kz{Spearman's rank correlation between likerate and iterations: ($\rho =-0.23$, $S = 17752570$, $p<.0001$)}, suggesting an overall preference for simpler puzzles. Interestingly, like rate was higher for puzzles requiring more steps per box ($\rho = 0.18$, $t(440)=3.74$, $p=.00021$). 
 
 We next considered the relation between enjoyment and the probability of success. Puzzle like rate was not linearly predicted by puzzle completion rate ($F(1,440)=3.25$, $p=.07$; adjusted $R^{2}=0.0051$). %Pearson's $\rho = 0.086$%
 Including a quadratic term significantly improved model fit ($F(1,439)=5.11$, $p=.02$; see Fig. \ref{fig:gleaning-figure}B), suggesting that the most liked puzzles lay in a sweet spot of difficulty. The highest like rate was estimated at 73\% completion rate, which is close to the average puzzle completion rate (69.5\%). However, the quadratic model explained only a limited amount of variation in like rates (adjusted $R^{2}=0.014$), so we caution against generalizing this relationship beyond the present dataset.
@@ -262,17 +244,6 @@ Replicating prior work \cite{braendle2024fun},
 we also found some evidence that puzzles with medium difficulty elicited more enjoyment. Interestingly, puzzles that require more steps per box had higher like rates. Perhaps these puzzles afford longer durations of game play and sustain longer engagement. As these are correlational analyses, we refrain from making causal conclusions. 
 
 This data is valuable for capturing variation in puzzle designs and people's reactions in a naturalistic setting: on a game website where people are, presumably, playing for fun. However, we had no access to player-specific data, such as their level of experience, how often they repeated a puzzle, or how long they spent on each puzzle. Further, while individual players can only like a puzzle once, we do not know if they voted after their first attempt, or only after completing it. This uncertainty about the data generation process hinders inferring generalizable conclusions about the factors that impact puzzle enjoyment. In Study 2, we ran an experiment to investigate how such participant-specific and attempt-specific factors might impact puzzle appraisals. 
-
-% Since expectations about task difficulty interacts with task enjoyment \cite{}
-
-% To being answering these questions, we designed a controlled experiment in which we can control collect full puzzle-attempt traces, and run more detailed analyses accounting for variation 
-% We were therefore fundamentally limited in to ask questions about.
-% \begin{itemize}
-%     \item No control over participant experience - same person could have submitted multiple attempts, etc.
-%     \item Enjoyment metric may not represent full variability -- total number of reactions was a very small percent 
-%     \item Cannot link attempt to reaction -- surely reactions are a function of the puzzle-solving experience, not just static puzzle properties? We want to have participant-specific measures, e.g., number of restarts, optimality of plan, etc.
-%     \item No information about participants -- surely familiarity and expertise matters
-% \end{itemize}
 
 \section{Study 2: Impact of puzzle-solving experience on enjoyment}
 
@@ -343,9 +314,6 @@ Nonetheless, we found that both enjoyment and difficulty ratings were highly rel
 \subsubsection{Visual features and solution complexity did not predict self-reported enjoyment}
 Across puzzles, we found that average enjoyment ratings were \textit{not} strongly predicted by either visual features (\textit{i.e., }puzzle area and openness) or solution complexity (\textit{i.e., }solution length and number of search iterations required). Figure 4 shows adjusted R-squared values from linear mixed effects (LME) models with random effects for participant and puzzle, and fixed effects for visual features ($R^2= .005$), solution complexity ($R^2= .010$), and average completion rate ($R^2=.051$). Incorporating all puzzle features improves model fit ($R^2= .073$), but is still far below the maximal achievable explanatory power estimated from split-half reliability ($R^2=.73$). Thus, other participants are much better predictors of how much someone will enjoy a puzzle, compared to puzzle-specific features.
 
-%On their own, each of these explained less than 1\% of total variance (adjusted R-squared values from a linear mixed effects model with random participant and item intercepts). Instead, puzzle completion rates in the online corpus was the best predictor of both ratings, explaining about 5\% of total variance.
-
-
 \subsubsection{Participants rate difficult puzzles as less enjoyable}
 
 Next, we examine how self-report measures correspond with measures of puzzle enjoyment and difficulty in Study 1. First, we examined the relationship between puzzle enjoyment and difficulty (Figure 5A). Unlike the quadratic relationship found in Study 1, here we found a strong linear relationship (Pearson's $\rho(22)=-.947$, $p<.001$): puzzles rated as more difficult were rated (by different participants) as less enjoyable. Consistent with this, we found that observed puzzle completion rates from Study 1 significantly predicted both average difficulty ratings (Pearson's $\rho(22)=-0.50$, $p=.013$) and enjoyment ratings (Pearson's $\rho(22)=0.48$, $p = .017$). 
@@ -361,11 +329,9 @@ When participants solve a puzzle, they report greater enjoyment when they attemp
 % Volume of activity may reflect engagement, exploration, or interest.
 
 \subsubsection{How might practice change which puzzles people think will be more fun?}
-% \jc{Include descriptives? look at top and bottom puzzle for each condition/phase, and ask for what proportion of participants they were ranked as such?}
 
 We analyzed responses on the Window Shopping task by transforming participants' binary choices into ELO scores. This is a common approach for assigning skill scores to winners and losers in head-to-head matches, and captures how likely a puzzle will be selected in a new comparison against another randomly selected puzzle. %ELO scores are defined on an interval scale, and can be computed for individual participants from a small number of comparison trials. %The advantage of ELO scores over mean selection rate is that ELO scores provide an interval scale for puzzle rank, and allow us to compute puzzle rankings for individual participants. despite each participant appraising each puzzle only twice.
 We use the R package EloChoice \cite{Clark2018} to compute participant-specific ELO scores across 10,000 permutations of trial order, before aggregating across participants to obtain a puzzle-specific ELO score for each study phase and rating condition. 
-% Aggregating across participants, puzzle ELO scores were highly correlated with the proportion of comparisons the puzzle was selected in (). 
 
 One way that puzzle appraisals may change from pre- to post-test is that choices can become more consistent across different participants. We found no evidence for this: split-half reliability for ELO scores ranged from 0.31 to 0.56, with no differences of condition, study phase, or stimuli set. This relatively low consistency score is perhaps unsurprising given that visual features (e.g., puzzle area or openness) predicted less than 1\% of variance in self-reported enjoyment.
 % -- which was collected after a much longer exposure time.
@@ -396,26 +362,11 @@ This discrepancy may be due to differences in game complexity and study design: 
 
 We look forward to these lines of future research that will help us better understand how people both appraise past experiences and anticipate how rewarding future experience can be.
 
-% In Study 1, we examined which features of puzzle predict enjoyment  a puzzle layout predicted enjoyment ..., \textit{Across} puzzles, Surface-level puzzle features may be informative about the puzzle experience. 
-% In Study 2, we investigated the relative impact of visual features, solution complexity, and puzzle-solving experience on enjoyment ratings. We found that simple read outs of puzzle-solving behavior accounted for significant variability in enjoyment ratings \textit{within} puzzles and participants. Further, we found that self-reported puzzle enjoyment was highly reliable across participants. 
-
-% Future work on how people will use enjoyment appraisals when selecting tasks. 
-% Future: Manipulate goal contexts 
-% Future: other kinds of appraisals, such as which puzzles 
-
-%how people reason about past and future experiences
-%experiences that are both fruitful and rewarding.
-
-% In exploratory analyses, we found an intriguing effect of puzzle-solving practice on which puzzles people think seems more enjoyable. At posttest, the puzzles that people thought seemed more enjoyable was significantly predicted by the puzzles that other participants though seemed more difficult. 
 \section{Acknowledgments}
 The authors would like to thank Graham Todd for implementation of the A* search algorithm, and members of the Cognitive Tools Lab at Stanford University for helpful discussion. 
 J.C is supported by the Stanford Accelerator for Learning. 
 K.Z. is supported by the Stanford Institute for Research in the Social Sciences (IRiSS).
 J.E.F is supported by NSF CAREER Award \#2436199, NSF DRL \#2400471, and awards from ONR Science of Autonomy, the Stanford Human-Centered AI Institute (HAI) and Stanford Accelerator for Learning.
-
-%We gratefully acknowledge support from NSF CAREER Award \#2436199 (J.E.F.), NSF DRL \#2400471 (J.E.F, K.Z.), and awards from ONR Science of Autonomy (J.E.F, J.C), the Stanford Human-Centered AI Institute (HAI; K.Z.), Stanford Accelerator for Learning (SAL; J.C, J.E.F), and Stanford Institute for Research in the Social Sciences (IRiSS; K.Z.).
-
-%J.E.F is supported by NSF CAREER Award \#2436199, NSF DRL \#2400471, and awards from ONR Science of Autonomy, the Stanford Human-Centered AI Institute (HAI) and Stanford Accelerator for Learning.
 
 \bibliographystyle{apacite}
 
@@ -424,7 +375,6 @@ J.E.F is supported by NSF CAREER Award \#2436199, NSF DRL \#2400471, and awards 
 
 % \FloatBarrier
 
-% \bibliography{CogSci_Template}
 \bibliography{fun_puzzles}
 
 

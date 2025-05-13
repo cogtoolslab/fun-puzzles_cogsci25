@@ -1,9 +1,15 @@
 # What makes a puzzle fun to solve?
 
-Project investigating predictors of enjoyment ratings in Sokoban.
+Project investigating predictors of enjoyment ratings in Sokoban. Published at CogSci 2025: 
+
+> Chu, J., Zheng, K., and Fan, J. E. (2025). What makes people think a puzzle is fun to solve? *Proceedings of the 47th Annual Meeting of the Cognitive Science Society.*
 
 - Study 1 (online corpus): Examining natural variation in puzzle features and enjoyment "in the wild"
 - Study 2 (experiment): Impact of puzzle-solving experience on enjoyment ratings
+
+<p align="center">
+  <img width="80%" src="stimuli/project_outline.png"></img>
+</p>
 
 ## Where to find things
 
@@ -15,6 +21,7 @@ Project investigating predictors of enjoyment ratings in Sokoban.
   - `plots`: analysis plots, which may be additionally polished and formatted for figures in a publication. 
 - `stimuli`: This directory contains any download/preprocessing scripts for data that are _inputs_ to this project. This include scripts that upload materials to the lab `stimuli`  MongoDB database for web experiments.
 - `utils`: This directory contains any files defining helper functions.
+- `writing`: This directory contains files for 
 
 ## Running code
 
@@ -41,10 +48,6 @@ We scraped puzzles and metadata from SokobanOnline.com to analyze what puzzle fe
 We use a JS implementation of Sokoban. Players control the turtle and try to turn grey pebbles into purple gems, by pushing pebbles onto yellow goal tiles. In this version, players can reset the level and undo previous moves.
 
 ### Experiment
-
-<p align="center" style="font-size: smaller">
-  <img width="100%" src="stimuli/exp_outline.png"></img>
-</p>
 
 We ran an experiment to see what makes people think a puzzle is fun to solve. Stimuli comprised 3 sets of 8 puzzles, for a total of 24 puzzles. Over an experimental session, participants completed a pretest Window Shopping task, a Puzzle testing task, and a posttest Window Shopping task. Each participant received a different puzzle set for each task, with set order counterbalanced across participants.
 
