@@ -23,7 +23,7 @@ YYYY-MM-DD
 
 #### 1.1.1 `iterationName` = `production2`
 
-2024-01-23
+2025-01-23
 
 - add comprehension check; two attempts allowed before returning
   - appears as 2qn on single page after practice levels, before first comparison task. Following [prolific policy](https://researcher-help.prolific.com/en/article/fb63bb)
@@ -31,7 +31,7 @@ YYYY-MM-DD
 
 #### 1.1.0 `iterationName` = `production`
 
-2024-01-22
+2025-01-22
 
 - 3 sets of 8 puzzles
 - counterbalance which set is in which study phase (pre,main,post)
@@ -44,7 +44,7 @@ YYYY-MM-DD
 
 #### 1.0.0 `iterationName` = `pilot1_debug`
 
-2024-01-08
+2025-01-08
 
 - stimuli from `fun-puzzles-pilot` collection
 - Compare task has 8 trials of hand-selected pairs from Set B and Set C
