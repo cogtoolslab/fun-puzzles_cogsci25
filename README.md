@@ -21,7 +21,7 @@ Project investigating predictors of enjoyment ratings in Sokoban. Published at C
   - `plots`: analysis plots, which may be additionally polished and formatted for figures in a publication. 
 - `stimuli`: This directory contains any download/preprocessing scripts for data that are _inputs_ to this project. This include scripts that upload materials to the lab `stimuli`  MongoDB database for web experiments.
 - `utils`: This directory contains any files defining helper functions.
-- `writing`: This directory contains files for 
+- `writing`: This directory contains files for generating the paper
 
 ## Running code
 
